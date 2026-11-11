@@ -43,13 +43,8 @@ OUTLINE_SCHEMA = {
 
 SELECTION_SCHEMA = {
     "type": "object",
-    "properties": {
-        "tldr": RANGE_SCHEMA,
-        "ttldr": RANGE_SCHEMA,
-        "tldr_estimated_seconds": {"type": "number"},
-        "ttldr_estimated_seconds": {"type": "number"},
-    },
-    "required": ["tldr", "ttldr", "tldr_estimated_seconds", "ttldr_estimated_seconds"],
+    "properties": {"ranges": RANGE_SCHEMA, "estimated_seconds": {"type": "number"}},
+    "required": ["ranges", "estimated_seconds"],
 }
 
 ISSUE_PROPS = {"quote": {"type": "string"}, "segment": {"type": "integer"}, "type": {"type": "string"},
@@ -66,10 +61,9 @@ FIDELITY_SCHEMA = {
         "fidelity_score": {"type": "number"},
         "coverage_score": {"type": "number"},
         "issues": {"type": "array", "items": {"type": "object", "properties": {
-            "version": {"type": "string", "enum": ["tldr", "ttldr"]},
             "sentence_ids": {"type": "array", "items": {"type": "string"}},
             "type": {"type": "string"}, "fix": {"type": "string"}, "blocking": {"type": "boolean"}},
-            "required": ["version", "sentence_ids", "type", "fix", "blocking"]}},
+            "required": ["sentence_ids", "type", "fix", "blocking"]}},
     },
     "required": ["fidelity_score", "coverage_score", "issues"],
 }
@@ -188,19 +182,26 @@ def kept_positions(pairs):
     return {position for first, last in pairs for position in range(first, last + 1)}
 
 
-def check_lengths(video, tldr, ttldr, target_seconds):
+def length_problems(name, seconds, target_seconds=None):
     problems = []
-    tldr_seconds = total_seconds(video, tldr)
-    ttldr_seconds = total_seconds(video, ttldr)
-    low, high = TLDR_BOUNDS
-    if not low <= tldr_seconds <= high:
-        problems.append(f"TLDR is {tldr_seconds:.0f}s, outside the hard limits {low}-{high}s.")
-    elif abs(tldr_seconds - target_seconds) > TARGET_TOLERANCE * target_seconds:
-        problems.append(f"TLDR is {tldr_seconds:.0f}s but the target is {target_seconds:.0f}s.")
-    low, high = TTLDR_BOUNDS
-    if not low <= ttldr_seconds <= high:
-        problems.append(f"TTLDR is {ttldr_seconds:.0f}s, outside the limits {low}-{high}s.")
+    low, high = TLDR_BOUNDS if name == "tldr" else TTLDR_BOUNDS
+    if not low <= seconds <= high:
+        problems.append(f"The {name.upper()} is {seconds:.0f}s, outside the limits {low}-{high}s.")
+    elif target_seconds and abs(seconds - target_seconds) > TARGET_TOLERANCE * target_seconds:
+        problems.append(f"The {name.upper()} is {seconds:.0f}s but the target is {target_seconds:.0f}s.")
     return problems
+
+
+def clip_to(pairs, allowed):
+    """Garde seulement les parties des plages qui tombent dans les plages autorisées (TTLDR dans TLDR)."""
+    clipped = []
+    for first, last in pairs:
+        for allowed_first, allowed_last in allowed:
+            start = max(first, allowed_first)
+            end = min(last, allowed_last)
+            if start <= end:
+                clipped.append([start, end])
+    return clipped
 
 
 def kept_text(video, pairs):
@@ -236,75 +237,109 @@ def apply_extra_sponsors(video, outline):
             video.sentences[position]["sponsor"] = True
 
 
-def selection_request(video, meta, outline, target_seconds, previous=None, feedback=None):
-    text = (f"Title: {meta['title']}\nOriginal duration: {format_time(meta['duration'])}\n"
-            f"TLDR target: {target_seconds / 60:.1f} min ({target_seconds:.0f}s). "
-            f"TTLDR: 60-120s.\n\nOutline:\n{json.dumps(outline, indent=1)}\n\n"
-            f"Transcript:\n{video.transcript_text()}")
+def tldr_sentences_text(video, tldr):
+    """Phrases du TLDR, groupées par segment, pour choisir le TTLDR."""
+    blocks = []
+    for number, (first, last) in enumerate(tldr, start=1):
+        lines = [f"--- TLDR segment {number} ---"]
+        for position in range(first, last + 1):
+            sentence = video.sentences[position]
+            mark = " ✂" if video.can_end(position) else ""
+            lines.append(f"{sentence['id']}  {video.duration(position):.1f}s  {sentence['text']}{mark}")
+        blocks.append("\n".join(lines))
+    return "\n\n".join(blocks)
+
+
+def request_selection(name, context, previous, feedback):
+    text = context
     if previous:
         text += ("\n\nYOUR PREVIOUS SELECTION (after automatic snapping to clean cuts, with real "
                  f"durations):\n{json.dumps(previous, indent=1)}\n\nFEEDBACK TO ADDRESS:\n{feedback}\n\n"
                  "Produce a corrected, complete selection. Fix ONLY the problems listed, by changing only "
                  "the ranges involved; keep every other range exactly as it was.")
-    return ask(prompt("select"), text, SELECTION_SCHEMA)
+    return ask(prompt(f"select_{name}"), text, SELECTION_SCHEMA)
 
 
-def review(video, tldr, ttldr, target_seconds):
-    def blind(pairs):
+def review(video, name, pairs, budget):
+    def blind():
         return ask(prompt("verify_blind"), kept_text(video, pairs), BLIND_SCHEMA)
 
     def fidelity():
-        text = (f"TLDR length budget: {target_seconds:.0f}s. TTLDR: 60-120s.\n\n"
+        text = (f"VERSION: {name.upper()}, length budget {budget}.\n\n"
                 f"ORIGINAL TRANSCRIPT:\n{video.transcript_text(with_cut_marks=False)}\n\n"
-                f"TLDR RANGES:\n{json.dumps(ranges_as_ids(video, tldr))}\n\n"
-                f"TLDR TEXT:\n{kept_text(video, tldr)}\n\n"
-                f"TTLDR RANGES:\n{json.dumps(ranges_as_ids(video, ttldr))}\n\n"
-                f"TTLDR TEXT:\n{kept_text(video, ttldr)}")
+                f"KEPT RANGES:\n{json.dumps(ranges_as_ids(video, pairs))}\n\n"
+                f"KEPT TEXT:\n{kept_text(video, pairs)}")
         return ask(prompt("verify_fidelity"), text, FIDELITY_SCHEMA)
 
-    with ThreadPoolExecutor(max_workers=3) as pool:
-        tldr_future = pool.submit(blind, tldr)
-        ttldr_future = pool.submit(blind, ttldr)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        blind_future = pool.submit(blind)
         fidelity_future = pool.submit(fidelity)
-        return {"tldr_blind": tldr_future.result(), "ttldr_blind": ttldr_future.result(),
-                "fidelity": fidelity_future.result()}
+        return {"blind": blind_future.result(), "fidelity": fidelity_future.result()}
 
 
-def evaluate(reviews, length_problems):
-    """Réussi = aucun problème bloquant, fidélité >= 8, durées respectées.
+def evaluate(reviews, problems):
+    """Réussi = aucun problème bloquant, fidélité >= 8, durée respectée.
 
-    Les notes de fluidité ne servent qu'à départager les tours : calibrées sur des extraits
-    continus non coupés de l'original, elles plafonnent autour de 4 à 6."""
-    blocking = [issue for key in ("tldr_blind", "ttldr_blind", "fidelity")
-                for issue in reviews[key]["issues"] if issue.get("blocking")]
-    scores = {
-        "tldr_flow": reviews["tldr_blind"]["score"],
-        "ttldr_flow": reviews["ttldr_blind"]["score"],
-        "fidelity": reviews["fidelity"]["fidelity_score"],
-        "coverage": reviews["fidelity"]["coverage_score"],
-    }
-    passed = scores["fidelity"] >= 8 and not blocking and not length_problems
-    total = sum(scores.values()) - 3 * len(blocking) - 3 * len(length_problems)
+    La note de fluidité ne sert qu'à départager les tours : un extrait continu non coupé
+    de l'original n'obtient que 4 à 6."""
+    blocking = [issue for key in ("blind", "fidelity") for issue in reviews[key]["issues"] if issue.get("blocking")]
+    scores = {"flow": reviews["blind"]["score"], "fidelity": reviews["fidelity"]["fidelity_score"],
+              "coverage": reviews["fidelity"]["coverage_score"]}
+    passed = scores["fidelity"] >= 8 and not blocking and not problems
+    total = sum(scores.values()) - 3 * len(blocking) - 3 * len(problems)
     return scores, blocking, passed, total
 
 
-def feedback_text(notes, length_problems, reviews):
-    """Ne renvoie à l'agent que ce qui doit être corrigé : durées et problèmes bloquants."""
+def feedback_text(notes, problems, reviews):
+    """Ne renvoie à l'agent que ce qui doit être corrigé : durée et problèmes bloquants."""
     lines = []
-    if length_problems:
-        lines.append("LENGTH: " + " ".join(length_problems))
+    if problems:
+        lines.append("LENGTH: " + " ".join(problems))
     if notes:
         lines.append("AUTOMATIC ADJUSTMENTS: " + " ".join(notes))
-    for version in ("tldr", "ttldr"):
-        for issue in reviews[f"{version}_blind"]["issues"]:
-            if issue["blocking"]:
-                lines.append(f"- {version.upper()} segment {issue.get('segment')}: \"{issue['quote']}\" -> "
-                             f"{issue['type']} (first-time viewer): {issue['fix']}")
+    for issue in reviews["blind"]["issues"]:
+        if issue["blocking"]:
+            lines.append(f"- segment {issue.get('segment')}: \"{issue['quote']}\" -> {issue['type']} "
+                         f"(first-time viewer): {issue['fix']}")
     for issue in reviews["fidelity"]["issues"]:
         if issue["blocking"]:
-            lines.append(f"- {issue['version'].upper()} {', '.join(issue['sentence_ids'])}: {issue['type']} "
+            lines.append(f"- {', '.join(issue['sentence_ids'])}: {issue['type']} "
                          f"(reviewer who knows the full video): {issue['fix']}")
     return "\n".join(lines)
+
+
+def selection_loop(video, folder, name, context, budget, target_seconds=None, allowed=None):
+    """Choisit une version (tldr ou ttldr), la fait juger, et la révise jusqu'à MAX_ROUNDS fois."""
+    best = None
+    previous = None
+    feedback = None
+    for round_number in range(1, MAX_ROUNDS + 1):
+        raw = request_selection(name, context, previous, feedback)
+        pairs, notes = normalize(video, raw["ranges"])
+        if allowed is not None:
+            clipped = clip_to(pairs, allowed)
+            if kept_positions(clipped) != kept_positions(pairs):
+                notes.append("Parts outside the TLDR were removed.")
+            pairs = clipped
+        seconds = total_seconds(video, pairs)
+        problems = length_problems(name, seconds, target_seconds)
+        reviews = review(video, name, pairs, budget)
+        scores, blocking, passed, total = evaluate(reviews, problems)
+        attempt = {"round": round_number, "raw": raw, "notes": notes, "length_problems": problems,
+                   "ranges": ranges_as_ids(video, pairs), "seconds": round(seconds, 1), "reviews": reviews,
+                   "scores": scores, "blocking": len(blocking), "passed": passed, "total": total}
+        write_json(folder / "attempts" / f"{name}_round{round_number}.json", attempt)
+        log(folder, f"{name.upper()} tour {round_number} : {seconds:.0f} s, {len(pairs)} segments, "
+                    f"scores {scores}, bloquants {len(blocking)}")
+        if best is None or total > best["total"]:
+            best = attempt
+        if passed:
+            break
+        previous = {"ranges": attempt["ranges"], "seconds": attempt["seconds"]}
+        feedback = feedback_text(notes, problems, reviews)
+    if not best["passed"]:
+        log(folder, f"{name.upper()} : aucun tour n'a passé tous les critères, meilleur tour gardé : {best['round']}")
+    return best
 
 
 def select(sentences, meta, folder):
@@ -317,46 +352,27 @@ def select(sentences, meta, folder):
     target_minutes = min(max(outline["tldr_target_minutes"], 5), 15, 0.4 * meta["duration"] / 60)
     target_seconds = max(target_minutes, 5) * 60
     log(folder, f"Plan fait, densité {outline['density']}, cible TLDR {target_seconds / 60:.1f} min")
+    (folder / "attempts").mkdir(exist_ok=True)
 
-    attempts_dir = folder / "attempts"
-    attempts_dir.mkdir(exist_ok=True)
-    best = None
-    previous = None
-    feedback = None
-    for round_number in range(1, MAX_ROUNDS + 1):
-        raw = selection_request(video, meta, outline, target_seconds, previous, feedback)
-        tldr, notes = normalize(video, raw["tldr"])
-        ttldr, ttldr_notes = normalize(video, raw["ttldr"])
-        notes += ttldr_notes
-        missing = kept_positions(ttldr) - kept_positions(tldr)
-        if missing:
-            extra = [{"first": video.sentences[p]["id"], "last": video.sentences[p]["id"]} for p in missing]
-            tldr, _ = normalize(video, [{"first": video.sentences[a]["id"], "last": video.sentences[b]["id"]}
-                                        for a, b in tldr] + extra)
-            notes.append(f"{len(missing)} TTLDR sentences were not in the TLDR: added to the TLDR.")
-        length_problems = check_lengths(video, tldr, ttldr, target_seconds)
-        reviews = review(video, tldr, ttldr, target_seconds)
-        scores, blocking, passed, total = evaluate(reviews, length_problems)
-        attempt = {
-            "round": round_number, "raw": raw, "notes": notes, "length_problems": length_problems,
-            "tldr": ranges_as_ids(video, tldr), "ttldr": ranges_as_ids(video, ttldr),
-            "tldr_seconds": round(total_seconds(video, tldr), 1),
-            "ttldr_seconds": round(total_seconds(video, ttldr), 1),
-            "reviews": reviews, "scores": scores, "blocking": len(blocking), "passed": passed, "total": total,
-        }
-        write_json(attempts_dir / f"round{round_number}.json", attempt)
-        log(folder, f"Tour {round_number} : TLDR {attempt['tldr_seconds'] / 60:.1f} min, "
-                    f"TTLDR {attempt['ttldr_seconds']:.0f} s, scores {scores}, bloquants {len(blocking)}")
-        if best is None or total > best["total"]:
-            best = attempt
-        if passed:
-            break
-        previous = {"tldr": attempt["tldr"], "ttldr": attempt["ttldr"],
-                    "tldr_seconds": attempt["tldr_seconds"], "ttldr_seconds": attempt["ttldr_seconds"]}
-        feedback = feedback_text(notes, length_problems, reviews)
+    tldr_context = (f"Title: {meta['title']}\nOriginal duration: {format_time(meta['duration'])}\n"
+                    f"TLDR target: {target_seconds / 60:.1f} min ({target_seconds:.0f}s).\n\n"
+                    f"Outline:\n{json.dumps(outline, indent=1)}\n\nTranscript:\n{video.transcript_text()}")
+    tldr = selection_loop(video, folder, "tldr", tldr_context, f"{target_seconds:.0f}s", target_seconds)
+    tldr_pairs = [[video.index[item["first"]], video.index[item["last"]]] for item in tldr["ranges"]]
 
-    best["target_seconds"] = target_seconds
-    write_json(path, best)
-    if not best["passed"]:
-        log(folder, f"Aucun tour n'a passé tous les critères, meilleur tour gardé : {best['round']}")
-    return best
+    ttldr_context = (f"Title: {meta['title']}\nTTLDR length: 60-120s.\n\n"
+                     f"Topic: {outline['topic']}\nTheo's thesis: {outline['thesis']}\n\n"
+                     f"TLDR sentences:\n{tldr_sentences_text(video, tldr_pairs)}")
+    ttldr = selection_loop(video, folder, "ttldr", ttldr_context, "60-120s", allowed=tldr_pairs)
+
+    selection = {
+        "tldr": tldr["ranges"], "ttldr": ttldr["ranges"],
+        "tldr_seconds": tldr["seconds"], "ttldr_seconds": ttldr["seconds"], "target_seconds": target_seconds,
+        "rounds": {"tldr": tldr["round"], "ttldr": ttldr["round"]},
+        "scores": {"tldr_flow": tldr["scores"]["flow"], "ttldr_flow": ttldr["scores"]["flow"],
+                   "tldr_fidelity": tldr["scores"]["fidelity"], "ttldr_fidelity": ttldr["scores"]["fidelity"],
+                   "tldr_coverage": tldr["scores"]["coverage"], "ttldr_coverage": ttldr["scores"]["coverage"]},
+        "passed": tldr["passed"] and ttldr["passed"],
+    }
+    write_json(path, selection)
+    return selection

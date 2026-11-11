@@ -64,4 +64,4 @@ def write_post(folder, meta, selection, reports):
     ]
     (folder / "post.txt").write_text("\n".join(lines) + "\n")
     write_json(folder / "qa.json", {"scores": selection["scores"], "passed": selection["passed"],
-                                    "round": selection["round"], **reports})
+                                    "rounds": selection["rounds"], **reports})
