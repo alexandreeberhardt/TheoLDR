@@ -1,5 +1,7 @@
 # TheoLDR : plan
 
+> Plan initial, conservé pour mémoire. Le fonctionnement réel est décrit dans `CLAUDE.md` (sélection en deux boucles TLDR puis TTLDR, juges recalibrés, révisions ciblées).
+
 Objectif : pour chaque nouvelle vidéo YouTube de Theo (@theo, t3dotgg), produire deux versions raccourcies, uniquement par coupes, sans ajout ni réordonnancement :
 - **TTLDR** : 1 à 2 min (sous-ensemble du TLDR)
 - **TLDR** : 5 à 15 min, durée choisie selon la densité de la vidéo
