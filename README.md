@@ -8,6 +8,16 @@ TheoLDR shortens [Theo's](https://www.youtube.com/@theo) YouTube videos **by cut
 ![Apple Silicon](https://img.shields.io/badge/runs%20on-Apple%20Silicon-black)
 ![Claude Code](https://img.shields.io/badge/agent-Claude%20Code-d97757)
 
+## Demo
+
+Start with the TTLDR, then compare with the original.
+
+| [Coding Isn't About Code Anymore](https://youtu.be/GtJKFhztgdM) | Length |
+|---|---:|
+| **[TTLDR](https://youtu.be/YS2yVlP-1ms)** | 1:44 |
+| [TLDR](https://youtu.be/vPECheshXu4) | 9:04 |
+| [Original](https://youtu.be/GtJKFhztgdM) | 45:21 |
+
 ## Results
 
 Real runs on recent videos:
