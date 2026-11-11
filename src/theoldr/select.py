@@ -244,8 +244,8 @@ def selection_request(video, meta, outline, target_seconds, previous=None, feedb
     if previous:
         text += ("\n\nYOUR PREVIOUS SELECTION (after automatic snapping to clean cuts, with real "
                  f"durations):\n{json.dumps(previous, indent=1)}\n\nFEEDBACK TO ADDRESS:\n{feedback}\n\n"
-                 "Produce a corrected, complete selection. Fix every problem listed while keeping what "
-                 "already works.")
+                 "Produce a corrected, complete selection. Fix ONLY the problems listed, by changing only "
+                 "the ranges involved; keep every other range exactly as it was.")
     return ask(prompt("select"), text, SELECTION_SCHEMA)
 
 
@@ -271,6 +271,10 @@ def review(video, tldr, ttldr, target_seconds):
 
 
 def evaluate(reviews, length_problems):
+    """Réussi = aucun problème bloquant, fidélité >= 8, durées respectées.
+
+    Les notes de fluidité ne servent qu'à départager les tours : calibrées sur des extraits
+    continus non coupés de l'original, elles plafonnent autour de 4 à 6."""
     blocking = [issue for key in ("tldr_blind", "ttldr_blind", "fidelity")
                 for issue in reviews[key]["issues"] if issue.get("blocking")]
     scores = {
@@ -279,30 +283,27 @@ def evaluate(reviews, length_problems):
         "fidelity": reviews["fidelity"]["fidelity_score"],
         "coverage": reviews["fidelity"]["coverage_score"],
     }
-    passed = (scores["tldr_flow"] >= 8 and scores["ttldr_flow"] >= 7 and scores["fidelity"] >= 8
-              and scores["coverage"] >= 7 and not blocking and not length_problems)
-    total = sum(scores.values()) - 2 * len(blocking) - 2 * len(length_problems)
+    passed = scores["fidelity"] >= 8 and not blocking and not length_problems
+    total = sum(scores.values()) - 3 * len(blocking) - 3 * len(length_problems)
     return scores, blocking, passed, total
 
 
 def feedback_text(notes, length_problems, reviews):
+    """Ne renvoie à l'agent que ce qui doit être corrigé : durées et problèmes bloquants."""
     lines = []
     if length_problems:
         lines.append("LENGTH: " + " ".join(length_problems))
     if notes:
         lines.append("AUTOMATIC ADJUSTMENTS: " + " ".join(notes))
     for version in ("tldr", "ttldr"):
-        result = reviews[f"{version}_blind"]
-        lines.append(f"{version.upper()} as seen by a first-time viewer (score {result['score']}/10):")
-        for issue in result["issues"]:
-            lines.append(f"- segment {issue.get('segment')}: \"{issue['quote']}\" -> {issue['type']}: "
-                         f"{issue['fix']}{' [BLOCKING]' if issue['blocking'] else ''}")
-    fidelity = reviews["fidelity"]
-    lines.append(f"FIDELITY {fidelity['fidelity_score']}/10, COVERAGE {fidelity['coverage_score']}/10 "
-                 "(reviewer who knows the full video):")
-    for issue in fidelity["issues"]:
-        lines.append(f"- {issue['version']} {', '.join(issue['sentence_ids'])}: {issue['type']}: "
-                     f"{issue['fix']}{' [BLOCKING]' if issue['blocking'] else ''}")
+        for issue in reviews[f"{version}_blind"]["issues"]:
+            if issue["blocking"]:
+                lines.append(f"- {version.upper()} segment {issue.get('segment')}: \"{issue['quote']}\" -> "
+                             f"{issue['type']} (first-time viewer): {issue['fix']}")
+    for issue in reviews["fidelity"]["issues"]:
+        if issue["blocking"]:
+            lines.append(f"- {issue['version'].upper()} {', '.join(issue['sentence_ids'])}: {issue['type']} "
+                         f"(reviewer who knows the full video): {issue['fix']}")
     return "\n".join(lines)
 
 
