@@ -11,8 +11,17 @@ WINDOW_SECONDS = 1.5
 MIN_MATCH = 0.66
 
 
+SPOKEN_FORMS = {"going": "gonna", "want": "wanna", "got": "gotta"}
+ANNOTATION = re.compile(r"^\[.*\]$|^>>$")
+
+
 def normalize(word):
     return re.sub(r"[^a-z0-9]", "", word.lower())
+
+
+def spoken_words(text):
+    """Mots réellement prononcés : sans annotations ([applause], >>)."""
+    return [word for word in text.replace("[", " [").replace("]", "] ").split() if not ANNOTATION.match(word)]
 
 
 def heard_words(media_path):
@@ -34,7 +43,9 @@ def word_heard(word, heard_texts):
 
     Correspondance exacte pour les mots courts : « rain » pour « train » est justement un mot mangé."""
     candidates = heard_texts + [a + b for a, b in zip(heard_texts, heard_texts[1:])]
-    if word in candidates:
+    if word in candidates or SPOKEN_FORMS.get(word) in candidates:
+        return True
+    if len(word) >= 4 and any(word in candidate for candidate in heard_texts):
         return True
     if len(word) < 6:
         return False
@@ -55,9 +66,8 @@ def check_joints(media_path, cuts, sentences):
     heard = heard_words(media_path)
     report = []
     for number, time in enumerate(joints(cuts)):
-        before = texts[cuts[number]["last"]].split()[-EDGE_WORDS:]
-        after_id = cuts[number + 1]["first"]
-        after = texts[after_id].split()[:EDGE_WORDS]
+        before = spoken_words(texts[cuts[number]["last"]])[-EDGE_WORDS:]
+        after = spoken_words(texts[cuts[number + 1]["first"]])[:EDGE_WORDS]
         ratio_before = found(before, heard, time - 1.0)
         ratio_after = found(after, heard, time + 1.0)
         ok = min(ratio_before, ratio_after) >= MIN_MATCH

@@ -9,6 +9,7 @@ MAX_ROUNDS = 3
 MERGE_GAP_SECONDS = 1.5
 TLDR_BOUNDS = (300, 900)
 TTLDR_BOUNDS = (60, 120)
+MAX_TTLDR_SEGMENTS = 6
 TARGET_TOLERANCE = 0.2
 
 RANGE_SCHEMA = {
@@ -382,6 +383,9 @@ def selection_loop(video, folder, name, context, budget, target_seconds=None, al
             pairs = clipped
         seconds = total_seconds(video, pairs)
         problems = length_problems(name, seconds, target_seconds)
+        if name == "ttldr" and len(pairs) > MAX_TTLDR_SEGMENTS:
+            problems.append(f"The TTLDR has {len(pairs)} segments after snapping (a range spanning two TLDR "
+                            f"segments is split in two); at most {MAX_TTLDR_SEGMENTS}. Drop the weakest ones.")
         if pairs:
             reviews = review(video, name, pairs, budget)
             scores, blocking, passed, total = evaluate(reviews, problems)
