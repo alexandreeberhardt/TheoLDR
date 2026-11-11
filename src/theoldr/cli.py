@@ -1,7 +1,4 @@
 import argparse
-import fcntl
-import json
-import os
 import subprocess
 import sys
 
@@ -12,6 +9,7 @@ from .render import media_duration, render_version
 from .select import final_ranges, select
 from .silences import detect_silences, mark_boundaries
 from .sponsor import fetch_sponsors, mark_sponsors
+from .system import acquire_lock, keep_awake, notify, open_folder
 from .transcript import build_transcript
 
 STEP_FILES = {
@@ -101,11 +99,6 @@ def audio_joints(folder, name, cuts, sentences):
         return None
 
 
-def notify(message):
-    script = f"display notification {json.dumps(message)} with title \"TheoLDR\""
-    subprocess.run(["osascript", "-e", script], check=False, capture_output=True)
-
-
 def latest_long_videos(count=5):
     result = subprocess.run(YTDLP + ["--flat-playlist", "--playlist-end", str(count),
                                      "--print", "%(id)s|%(duration)s|%(title)s", CHANNEL_URL],
@@ -147,12 +140,10 @@ def main():
     if args.command == "status":
         status()
         return
-    lock = open(ROOT / ".theoldr.lock", "w")
-    try:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
+    lock = acquire_lock(ROOT / ".theoldr.lock")
+    if lock is None:
         sys.exit("Another TheoLDR run is already in progress.")
-    subprocess.Popen(["caffeinate", "-i", "-w", str(os.getpid())])
+    keep_awake()
     if args.command == "run":
         folder = process(args.video, args.redo, args.keep_source)
     else:
@@ -167,4 +158,4 @@ def main():
         print(f"Processing: {title}")
         folder = process(video_id, keep_source=args.keep_source)
     print(f"Results: {folder}")
-    subprocess.run(["open", str(folder)], check=False)
+    open_folder(folder)

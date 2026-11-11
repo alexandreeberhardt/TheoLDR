@@ -3,3 +3,4 @@ videos/
 __pycache__/
 *.pyc
 .DS_Store
+.theoldr.lock
