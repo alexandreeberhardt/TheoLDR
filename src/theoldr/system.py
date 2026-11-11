@@ -55,3 +55,11 @@ def open_folder(folder):
     elif shutil.which("xdg-open"):
         subprocess.run(["xdg-open", str(folder)], check=False, **QUIET)
 
+
+
+def h264_encoders():
+    """Encoders to try in order: hardware on macOS (missing in some VMs), then libx264."""
+    software = ["-c:v", "libx264", "-preset", "fast"]
+    if sys.platform == "darwin":
+        return [["-c:v", "h264_videotoolbox"], software]
+    return [software]

@@ -23,16 +23,16 @@ def contact_sheet(video_path, cuts, out_path, columns=6):
         return None
     with tempfile.TemporaryDirectory() as tmp:
         frames = []
-        for number, time in enumerate(times):
-            for side, offset in (("a", -0.15), ("b", 0.15)):
-                frame = Path(tmp) / f"{number:03d}{side}.jpg"
+        for time in times:
+            for offset in (-0.15, 0.15):
+                frame = Path(tmp) / f"{len(frames):04d}.jpg"
                 subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{max(time + offset, 0):.2f}",
                                 "-i", str(video_path), "-frames:v", "1", "-vf", "scale=320:-2",
                                 str(frame)], check=True)
                 frames.append(frame)
         rows = (len(frames) + columns - 1) // columns
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-framerate", "1", "-pattern_type", "glob",
-                        "-i", f"{tmp}/*.jpg", "-vf", f"tile={columns}x{rows}:padding=4:color=white",
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-framerate", "1", "-start_number", "0",
+                        "-i", str(Path(tmp) / "%04d.jpg"), "-vf", f"tile={columns}x{rows}:padding=4:color=white",
                         "-frames:v", "1", str(out_path)], check=True)
     return out_path
 

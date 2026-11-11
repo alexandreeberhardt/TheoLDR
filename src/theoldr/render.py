@@ -1,6 +1,7 @@
 import subprocess
 
 from .common import read_json, write_json
+from .system import h264_encoders
 
 FADE = 0.02
 VIDEO_BITRATE = "3500k"
@@ -38,18 +39,22 @@ def render(source, cuts, out_path):
     last_end = cuts[-1]["end"]
     shifted = [{**cut, "start": round(cut["start"] - first_start, 3), "end": round(cut["end"] - first_start, 3)}
                for cut in cuts]
-    command = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-               "-ss", f"{first_start:.3f}", "-to", f"{last_end:.3f}", "-i", str(source),
-               "-filter_complex", filter_graph(shifted), "-map", "[v]", "-map", "[a]",
-               "-c:v", "h264_videotoolbox", "-b:v", VIDEO_BITRATE, "-c:a", "aac", "-b:a", "160k",
-               "-movflags", "+faststart", str(temporary)]
-    subprocess.run(command, check=True, capture_output=True, text=True)
-    temporary.rename(out_path)
+    for encoder in h264_encoders():
+        command = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                   "-ss", f"{first_start:.3f}", "-to", f"{last_end:.3f}", "-i", str(source),
+                   "-filter_complex", filter_graph(shifted), "-map", "[v]", "-map", "[a]",
+                   *encoder, "-b:v", VIDEO_BITRATE, "-c:a", "aac", "-b:a", "160k",
+                   "-movflags", "+faststart", str(temporary)]
+        result = subprocess.run(command, capture_output=True, text=True)
+        if result.returncode == 0:
+            temporary.replace(out_path)
+            return
+    raise RuntimeError(f"ffmpeg render failed:\n{result.stderr[-2000:]}")
 
 
 def media_duration(path):
     result = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
-                             str(path)], capture_output=True, text=True, check=True)
+                             str(path)], capture_output=True, encoding="utf-8", errors="replace", check=True)
     return float(result.stdout.strip())
 
 
