@@ -48,6 +48,9 @@ def reset(folder, step):
 def process(url_or_id, redo=None, keep_source=False):
     video_id = video_id_from(url_or_id)
     folder = video_dir(video_id)
+    if (folder / "qa.json").exists() and not redo:
+        print(f"Déjà traitée : {folder} (utiliser --redo pour refaire une étape)")
+        return folder
     if redo:
         reset(folder, redo)
     for stale in ("qa.json", "post.txt", "error.txt"):
