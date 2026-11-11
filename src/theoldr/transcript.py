@@ -26,7 +26,7 @@ def load_words(subs_path):
 
 
 def continues_sentence(word):
-    """Un mot qui commence par une minuscule prolonge la phrase : le point était une erreur des sous-titres."""
+    """A word starting with a lowercase letter continues the sentence: the period was a caption error."""
     return word["text"][0].islower()
 
 
@@ -49,8 +49,8 @@ def group_sentences(words):
 
 
 def split_at_longest_pause(words, next_word):
-    """Phrase trop longue (sous-titres sans ponctuation) : on coupe là où l'écart entre deux mots
-    est le plus grand, en gardant au moins 15 mots de chaque côté."""
+    """Sentence too long (captions without punctuation): split where the gap between two words
+    is largest, keeping at least 15 words on each side."""
     gaps = []
     for index in range(15, len(words) - 15):
         gaps.append((words[index]["start"] - words[index - 1]["start"], index))

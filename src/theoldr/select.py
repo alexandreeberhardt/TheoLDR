@@ -86,7 +86,7 @@ def prompt(name):
 
 
 class Video:
-    """Phrases d'une vidéo et calculs de temps de coupe."""
+    """A video's sentences and cut time computations."""
 
     def __init__(self, sentences):
         self.sentences = sentences
@@ -129,9 +129,9 @@ class Video:
 
 
 def normalize(video, raw_ranges):
-    """Valide des plages d'IDs, les cale sur des coupes propres, retire les sponsors, fusionne.
+    """Validates ID ranges, snaps them to clean cuts, removes sponsors, merges.
 
-    Renvoie (liste de paires de positions, liste de remarques)."""
+    Returns (list of position pairs, list of notes)."""
     notes = []
     pairs = []
     for item in raw_ranges:
@@ -189,8 +189,8 @@ def normalize(video, raw_ranges):
 
 
 def snap(video, first, last):
-    """Cale une plage sur des coupes propres : on l'élargit, sauf si cela fait entrer un sponsor,
-    auquel cas on la rétrécit. Renvoie None si plus rien ne reste."""
+    """Snaps a range to clean cuts: widen it, unless that would pull in a sponsor,
+    in which case shrink it. Returns None if nothing is left."""
     start = first
     while not video.can_start(start) and not video.sentences[start - 1].get("sponsor"):
         start -= 1
@@ -229,7 +229,7 @@ def length_problems(name, seconds, target_seconds=None):
 
 
 def clip_to(pairs, allowed):
-    """Garde seulement les parties des plages qui tombent dans les plages autorisées (TTLDR dans TLDR)."""
+    """Keeps only the parts of the ranges that fall inside the allowed ranges (TTLDR inside TLDR)."""
     clipped = []
     for first, last in pairs:
         for allowed_first, allowed_last in allowed:
@@ -253,8 +253,8 @@ def ranges_as_ids(video, pairs):
 
 
 def fingerprint(sentences):
-    """Empreinte des phrases : si le transcript change, les identifiants S0123 ne désignent plus
-    les mêmes phrases et le plan comme la sélection doivent être refaits."""
+    """Fingerprint of the sentences: if the transcript changes, the S0123 IDs no longer point to
+    the same sentences, so both the outline and the selection must be redone."""
     content = json.dumps([[sentence["id"], sentence["text"]] for sentence in sentences])
     return hashlib.sha1(content.encode()).hexdigest()[:16]
 
@@ -292,7 +292,7 @@ def apply_extra_sponsors(video, outline):
 
 
 def tldr_sentences_text(video, tldr):
-    """Phrases du TLDR, groupées par segment, pour choisir le TTLDR."""
+    """TLDR sentences, grouped by segment, to choose the TTLDR from."""
     blocks = []
     for number, (first, last) in enumerate(tldr, start=1):
         lines = [f"--- TLDR segment {number} ---"]
@@ -332,10 +332,10 @@ def review(video, name, pairs, budget):
 
 
 def evaluate(reviews, problems):
-    """Réussi = aucun problème bloquant, fidélité >= 8, durée respectée.
+    """Passed = no blocking issue, fidelity >= 8, length within limits.
 
-    La note de fluidité ne sert qu'à départager les tours : un extrait continu non coupé
-    de l'original n'obtient que 4 à 6."""
+    The flow score only breaks ties between rounds: an uncut continuous excerpt
+    of the original only gets 4 to 6."""
     blocking = [issue for key in ("blind", "fidelity") for issue in reviews[key]["issues"] if issue.get("blocking")]
     scores = {"flow": reviews["blind"]["score"], "fidelity": reviews["fidelity"]["fidelity_score"],
               "coverage": reviews["fidelity"]["coverage_score"]}
@@ -345,8 +345,8 @@ def evaluate(reviews, problems):
 
 
 def feedback_text(notes, problems, reviews):
-    """Ne renvoie à l'agent que ce qui doit être corrigé : durée, problèmes bloquants,
-    et déformations si la fidélité est insuffisante."""
+    """Sends back to the agent only what must be fixed: length, blocking issues,
+    and distortions if fidelity is too low."""
     issues = []
     for issue in reviews["blind"]["issues"]:
         if issue["blocking"]:
@@ -369,7 +369,7 @@ def feedback_text(notes, problems, reviews):
 
 
 def selection_loop(video, folder, name, context, budget, target_seconds=None, allowed=None):
-    """Choisit une version (tldr ou ttldr), la fait juger, et la révise jusqu'à MAX_ROUNDS fois."""
+    """Chooses a version (tldr or ttldr), has it judged, and revises it up to MAX_ROUNDS times."""
     best = None
     previous = None
     feedback = None
@@ -400,8 +400,8 @@ def selection_loop(video, folder, name, context, budget, target_seconds=None, al
                    "scores": scores, "blocking": len(blocking), "passed": passed, "total": total,
                    "rank": (passed, bool(pairs), in_bounds, total)}
         write_json(folder / "attempts" / f"{name}_round{round_number}.json", attempt)
-        log(folder, f"{name.upper()} tour {round_number} : {seconds:.0f} s, {len(pairs)} segments, "
-                    f"scores {scores}, bloquants {len(blocking)}")
+        log(folder, f"{name.upper()} round {round_number}: {seconds:.0f} s, {len(pairs)} segments, "
+                    f"scores {scores}, blocking {len(blocking)}")
         if best is None or attempt["rank"] > best["rank"]:
             best = attempt
         if passed:
@@ -409,7 +409,7 @@ def selection_loop(video, folder, name, context, budget, target_seconds=None, al
         previous = {"ranges": attempt["ranges"], "seconds": attempt["seconds"]}
         feedback = feedback_text(notes, problems, reviews)
     if not best["passed"]:
-        log(folder, f"{name.upper()} : aucun tour n'a passé tous les critères, meilleur tour gardé : {best['round']}")
+        log(folder, f"{name.upper()}: no round passed every criterion, keeping best round: {best['round']}")
     return best
 
 
@@ -423,7 +423,7 @@ def select(sentences, meta, folder):
     apply_extra_sponsors(video, outline)
     target_minutes = min(max(outline["tldr_target_minutes"], 5), 15, 0.4 * meta["duration"] / 60)
     target_seconds = max(target_minutes, 5) * 60
-    log(folder, f"Plan fait, densité {outline['density']}, cible TLDR {target_seconds / 60:.1f} min")
+    log(folder, f"Outline done, density {outline['density']}, TLDR target {target_seconds / 60:.1f} min")
     (folder / "attempts").mkdir(exist_ok=True)
 
     tldr_context = (f"Title: {meta['title']}\nOriginal duration: {format_time(meta['duration'])}\n"
@@ -452,8 +452,8 @@ def select(sentences, meta, folder):
 
 
 def final_ranges(sentences, selection, folder):
-    """Revalide les plages avant le rendu (utile après une retouche à la main de selection.json) :
-    coupes propres, pas de sponsor, ordre, et TTLDR inclus dans le TLDR."""
+    """Revalidates the ranges before rendering (useful after a manual edit of selection.json):
+    clean cuts, no sponsor, order, and TTLDR inside the TLDR."""
     video = Video(sentences)
     outline_path = folder / "outline.json"
     if outline_path.exists():
@@ -462,5 +462,5 @@ def final_ranges(sentences, selection, folder):
     ttldr, _ = normalize(video, selection["ttldr"])
     ttldr = clip_to(ttldr, tldr)
     if not tldr or not ttldr:
-        raise RuntimeError("Sélection vide après validation : impossible de rendre la vidéo")
+        raise RuntimeError("Empty selection after validation: cannot render the video")
     return {"tldr": ranges_as_ids(video, tldr), "ttldr": ranges_as_ids(video, ttldr)}

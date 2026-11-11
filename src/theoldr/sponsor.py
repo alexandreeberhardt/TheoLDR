@@ -10,8 +10,8 @@ CATEGORIES = ["sponsor", "selfpromo"]
 
 
 def fetch_sponsors(video_id, out_path):
-    """Segments SponsorBlock. Si le service est en panne, on continue sans (l'agent repère aussi
-    les sponsors) et on ne met rien en cache pour réessayer au prochain run."""
+    """SponsorBlock segments. If the service is down, carry on without them (the agent also spots
+    sponsors) and cache nothing, so the next run tries again."""
     if out_path.exists():
         return read_json(out_path)
     query = urllib.parse.urlencode({"videoID": video_id, "categories": json.dumps(CATEGORIES)})
@@ -31,7 +31,7 @@ def fetch_sponsors(video_id, out_path):
 
 
 def mark_sponsors(sentences, segments):
-    """Marque les phrases dont plus de la moitié tombe dans un segment SponsorBlock."""
+    """Flags sentences that fall more than halfway inside a SponsorBlock segment."""
     for sentence in sentences:
         length = max(sentence["next_start"] - sentence["start"], 0.01)
         covered = 0

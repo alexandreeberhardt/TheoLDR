@@ -1,7 +1,7 @@
 [project]
 name = "theoldr"
 version = "0.1.0"
-description = "Raccourcit les vidéos de Theo uniquement par coupes (TLDR et TTLDR)."
+description = "Shortens Theo's videos by cutting only (TLDR and TTLDR)."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

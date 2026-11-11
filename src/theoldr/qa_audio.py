@@ -1,5 +1,5 @@
-"""Contrôle des jonctions : retranscrit la vidéo raccourcie et vérifie que les mots
-de part et d'autre de chaque coupe sont bien entendus (pas de mot mangé ou tronqué)."""
+"""Joint check: transcribes the shortened video again and checks that the words
+on both sides of each cut are heard (no swallowed or clipped word)."""
 import re
 from difflib import SequenceMatcher
 
@@ -20,7 +20,7 @@ def normalize(word):
 
 
 def spoken_words(text):
-    """Mots réellement prononcés : sans annotations ([applause], >>)."""
+    """Words actually spoken: without annotations ([applause], >>)."""
     return [word for word in text.replace("[", " [").replace("]", "] ").split() if not ANNOTATION.match(word)]
 
 
@@ -39,9 +39,9 @@ def heard_words(media_path):
 
 
 def word_heard(word, heard_texts):
-    """Le mot attendu est-il entendu, seul ou collé au suivant (« 2.08 » entendu « 2 08 ») ?
+    """Is the expected word heard, alone or joined with the next one ("2.08" heard as "2 08")?
 
-    Correspondance exacte pour les mots courts : « rain » pour « train » est justement un mot mangé."""
+    Exact match for short words: "rain" for "train" is precisely a swallowed word."""
     candidates = heard_texts + [a + b for a, b in zip(heard_texts, heard_texts[1:])]
     if word in candidates or SPOKEN_FORMS.get(word) in candidates:
         return True
@@ -53,7 +53,7 @@ def word_heard(word, heard_texts):
 
 
 def found(expected, heard, around):
-    """Part des mots attendus entendus à moins de WINDOW_SECONDS de l'instant donné."""
+    """Share of the expected words heard within WINDOW_SECONDS of the given time."""
     expected = [normalize(word) for word in expected if normalize(word)]
     if not expected:
         return 1.0

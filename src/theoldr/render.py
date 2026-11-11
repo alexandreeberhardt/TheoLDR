@@ -7,7 +7,7 @@ VIDEO_BITRATE = "3500k"
 
 
 def build_cuts(sentences, ranges):
-    """Plages d'IDs -> intervalles [début, fin] en secondes, calés sur les silences."""
+    """ID ranges -> [start, end] intervals in seconds, snapped to silences."""
     index = {sentence["id"]: position for position, sentence in enumerate(sentences)}
     cuts = []
     for item in ranges:

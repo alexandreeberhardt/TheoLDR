@@ -1,49 +1,49 @@
-# TheoLDR : procédure pour un agent
+# TheoLDR: guide for an agent
 
-Outil qui raccourcit les vidéos YouTube de Theo (@theo) **uniquement par coupes** : pas d'ajout, pas de réordonnancement. Deux sorties par vidéo : `tldr.mp4` (5 à 15 min) et `ttldr.mp4` (1 à 2 min). Theo a donné son accord ; la publication sur X se fait à la main.
+A tool that shortens Theo's (@theo) YouTube videos **by cutting only**: nothing added, nothing reordered. Two outputs per video: `tldr.mp4` (5 to 15 min) and `ttldr.mp4` (1 to 2 min). Theo has agreed; posting on X is done by hand.
 
-## Lancer
+## Running
 ```
-uv run --extra qa theoldr latest          # dernière vidéo longue de la chaîne, si pas déjà faite
-uv run --extra qa theoldr run <url|id>    # une vidéo précise
-uv run theoldr status                     # vidéos traitées
+uv run --extra qa theoldr latest          # latest long video on the channel, if not done yet
+uv run --extra qa theoldr run <url|id>    # a specific video
+uv run theoldr status                     # processed videos
 ```
-Sans `--extra qa`, tout marche sauf le contrôle Whisper des jonctions.
-Durée : 5 à 15 min par vidéo, surtout les appels à Claude. Une vidéo déjà faite n'est pas retraitée sans `--redo`.
-Juste après la sortie d'une vidéo, YouTube n'a parfois pas encore les sous-titres auto : l'outil le dit, il suffit de relancer plus tard.
+Without `--extra qa`, everything works except the Whisper check of the joints.
+Time: 5 to 15 min per video, mostly the Claude calls. A video already done is not processed again without `--redo`.
+Right after a video comes out, YouTube sometimes has no auto captions yet: the tool says so, just run it again later.
 
-## Étapes et fichiers (`videos/<id>/`)
-Chaque étape écrit son fichier et est sautée s'il existe déjà. En cas de plantage, relancer la même commande.
+## Steps and files (`videos/<id>/`)
+Each step writes its file and is skipped if that file already exists. After a crash, run the same command again.
 
-| Étape | Fichier | Module |
+| Step | File | Module |
 |---|---|---|
-| métadonnées, sous-titres auto json3, vidéo 720p | `meta.json`, `subs.json3`, `source.mp4` | `fetch.py` |
-| phrases horodatées | `transcript.json` | `transcript.py` |
-| silences, coupes propres possibles après chaque phrase | `silences.json` | `silences.py` |
+| metadata, json3 auto captions, 720p video | `meta.json`, `subs.json3`, `source.mp4` | `fetch.py` |
+| timestamped sentences | `transcript.json` | `transcript.py` |
+| silences, possible clean cuts after each sentence | `silences.json` | `silences.py` |
 | sponsors (SponsorBlock) | `sponsor.json` | `sponsor.py` |
-| plan de la vidéo (agent) | `outline.json` | `select.py` |
-| TLDR : sélection, 2 juges (à l'aveugle et fidélité), jusqu'à 3 tours ; puis TTLDR choisi dans le TLDR, même boucle | `attempts/tldr_roundN.json`, `attempts/ttldr_roundN.json`, `selection.json` | `select.py` |
-| rendu ffmpeg | `cuts_*.json`, `tldr.mp4`, `ttldr.mp4` | `render.py` |
-| contrôles | `qa.json`, `sheet_*.jpg`, `post.txt` | `qa.py`, `qa_audio.py` |
+| video outline (agent) | `outline.json` | `select.py` |
+| TLDR: selection, 2 judges (blind and fidelity), up to 3 rounds; then TTLDR chosen from the TLDR, same loop | `attempts/tldr_roundN.json`, `attempts/ttldr_roundN.json`, `selection.json` | `select.py` |
+| ffmpeg render | `cuts_*.json`, `tldr.mp4`, `ttldr.mp4` | `render.py` |
+| checks | `qa.json`, `sheet_*.jpg`, `post.txt` | `qa.py`, `qa_audio.py` |
 
-`source.mp4` est supprimé à la fin si tout est OK (`--keep-source` pour le garder).
+`source.mp4` is deleted at the end if everything is OK (`--keep-source` to keep it).
 
-## Refaire une partie
-- `--redo select` : refait le plan et la sélection (après un changement de prompts).
-- `--redo selection` : garde le plan, refait la sélection.
-- `--redo render` : refait seulement le rendu.
-- Retouche à la main : modifier les plages `first`/`last` de `tldr` ou `ttldr` dans `selection.json`, puis relancer `run` (le rendu détecte que les coupes ont changé). Il faut `source.mp4` : s'il a été supprimé, il est retéléchargé.
+## Redoing part of it
+- `--redo select`: redoes the outline and the selection (after a prompt change).
+- `--redo selection`: keeps the outline, redoes the selection.
+- `--redo render`: redoes only the render.
+- Manual edit: change the `first`/`last` ranges of `tldr` or `ttldr` in `selection.json`, then run `run` again (the render detects that the cuts changed). It needs `source.mp4`: if it was deleted, it is downloaded again.
 
-## Principes à respecter
-- L'agent choisit des **identifiants de phrases**, jamais des temps. Les temps de coupe viennent des silences (`cut_after`), ce qui évite de couper un mot.
-- Une plage ne peut commencer ou finir que sur une frontière avec silence ; `normalize()` l'étend sinon.
-- Les appels `claude -p` sont isolés (`agent.py`) : dossier vide, aucun outil, `--safe-mode`. Ne pas retirer ces options : le juge à l'aveugle ne doit voir que le texte gardé.
-- Notes des juges : un extrait continu de l'original non coupé obtient 4 à 6/10 en fluidité. Elles ne servent qu'à comparer les tours. Le critère de réussite est : aucun problème bloquant, fidélité ≥ 8, durée dans les bornes, TTLDR en 6 morceaux au plus. Si aucun tour ne passe, le meilleur est rendu quand même (`passed: false` dans `qa.json`).
-- Les révisions ne reçoivent que les problèmes bloquants : demander plus de couverture fait ajouter des fragments et hache la vidéo.
-- `outline.json` et `selection.json` portent une empreinte du transcript : si `transcript.py` change, ils sont refaits automatiquement.
-- Whisper transcrit mal les extraits d'autres personnes sur fond de musique (vidéos de réaction) : une jonction signalée là est souvent une fausse alerte. Vérifier en retranscrivant quelques secondes autour.
+## Principles to keep
+- The agent picks **sentence IDs**, never times. Cut times come from the silences (`cut_after`), which avoids cutting a word.
+- A range can only start or end on a boundary with a silence; `normalize()` widens it otherwise.
+- The `claude -p` calls are isolated (`agent.py`): empty folder, no tools, `--safe-mode`. Do not remove these options: the blind judge must see only the kept text.
+- Judge scores: a continuous uncut excerpt of the original gets 4 to 6/10 for flow. Scores are only used to compare rounds. The success criterion is: no blocking issue, fidelity ≥ 8, length within limits, TTLDR in 6 pieces at most. If no round passes, the best one is rendered anyway (`passed: false` in `qa.json`).
+- Revisions only receive the blocking issues: asking for more coverage makes the agent add fragments and chops up the video.
+- `outline.json` and `selection.json` carry a fingerprint of the transcript: if `transcript.py` changes, they are redone automatically.
+- Whisper transcribes other people's clips over music badly (reaction videos): a joint flagged there is often a false alarm. Check by transcribing a few seconds around it.
 
-## Vérifier un résultat
-1. `qa.json` : durées, scores, `joints` (Whisper entend les mots attendus de part et d'autre de chaque coupe).
-2. `sheet_tldr.jpg` : image juste avant et juste après chaque coupe.
-3. Lire le texte gardé (voir `kept_text()` dans `select.py`) comme un spectateur.
+## Checking a result
+1. `qa.json`: lengths, scores, `joints` (Whisper hears the expected words on each side of every cut).
+2. `sheet_tldr.jpg`: frame just before and just after each cut.
+3. Read the kept text (see `kept_text()` in `select.py`) as a viewer would.

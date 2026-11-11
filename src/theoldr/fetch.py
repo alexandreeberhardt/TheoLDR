@@ -41,8 +41,8 @@ def fetch_subs(video_id, folder):
         if candidate.exists():
             candidate.rename(subs_path)
             return subs_path
-    raise RuntimeError("Pas encore de sous-titres automatiques anglais. YouTube les génère quelques minutes "
-                       "à quelques heures après la sortie : réessayer plus tard.")
+    raise RuntimeError("No English auto captions yet. YouTube generates them a few minutes "
+                       "to a few hours after release: try again later.")
 
 
 def fetch_video(video_id, folder):
@@ -58,11 +58,11 @@ def fetch_video(video_id, folder):
 def fetch(video_id, folder):
     meta = fetch_meta(video_id, folder)
     if meta["live_status"] in ("is_live", "is_upcoming"):
-        raise RuntimeError("Live en cours ou à venir : réessayer quand la vidéo sera publiée")
+        raise RuntimeError("Live or upcoming stream: try again once the video is published")
     if (meta["duration"] or 0) < 180:
-        raise SkipVideo("Vidéo trop courte (Short)")
-    log(folder, f"Vidéo : {meta['title']} ({meta['duration'] // 60} min)")
+        raise SkipVideo("Video too short (Short)")
+    log(folder, f"Video: {meta['title']} ({meta['duration'] // 60} min)")
     fetch_subs(video_id, folder)
     fetch_video(video_id, folder)
-    log(folder, "Téléchargement terminé")
+    log(folder, "Download finished")
     return meta

@@ -14,10 +14,10 @@ MAX_OTHER_FAILURES = 2
 
 
 def ask(system_prompt, user_text, schema, model=MODEL):
-    """Appel isolé à claude -p : dossier vide, aucun outil, aucune config utilisateur, sortie JSON.
+    """Isolated claude -p call: empty folder, no tools, no user config, JSON output.
 
-    Quota ou surcharge : on attend 10 min et on réessaie, jusqu'à 5 h 30 en tout.
-    Autre échec (délai dépassé, réponse sans JSON) : 2 nouvelles tentatives."""
+    Quota or overload: wait 10 min and retry, up to 5.5 h in total.
+    Other failure (timeout, response without JSON): 2 more attempts."""
     command = ["claude", "-p", "--safe-mode", "--tools", "", "--strict-mcp-config",
                "--no-session-persistence", "--model", model,
                "--system-prompt", system_prompt,
@@ -30,28 +30,28 @@ def ask(system_prompt, user_text, schema, model=MODEL):
             return problem
         if QUOTA_PATTERN.search(problem) and quota_waits < MAX_QUOTA_WAITS:
             quota_waits += 1
-            print(f"Quota ou surcharge ({problem[:120]!r}), attente {QUOTA_WAIT_SECONDS // 60} min", flush=True)
+            print(f"Quota or overload ({problem[:120]!r}), waiting {QUOTA_WAIT_SECONDS // 60} min", flush=True)
             time.sleep(QUOTA_WAIT_SECONDS)
             continue
         if other_failures < MAX_OTHER_FAILURES:
             other_failures += 1
             time.sleep(30)
             continue
-        raise RuntimeError(f"Appel agent en échec : {problem[-1500:]}")
+        raise RuntimeError(f"Agent call failed: {problem[-1500:]}")
 
 
 def call_once(command, user_text):
-    """Renvoie la sortie structurée, ou un texte décrivant le problème."""
+    """Returns the structured output, or a text describing the problem."""
     try:
         with tempfile.TemporaryDirectory() as empty_dir:
             result = subprocess.run(command, input=user_text, capture_output=True, text=True,
                                     cwd=empty_dir, timeout=CALL_TIMEOUT_SECONDS)
     except subprocess.TimeoutExpired:
-        return f"Délai de {CALL_TIMEOUT_SECONDS // 60} min dépassé"
+        return f"Timed out after {CALL_TIMEOUT_SECONDS // 60} min"
     try:
         payload = json.loads(result.stdout)
     except json.JSONDecodeError:
-        return (result.stderr + result.stdout)[-2000:] or f"code de sortie {result.returncode}"
+        return (result.stderr + result.stdout)[-2000:] or f"exit code {result.returncode}"
     if not payload.get("is_error") and payload.get("structured_output") is not None:
         return payload["structured_output"]
     return f"{result.stderr} {payload.get('result', '')} {payload.get('subtype', '')}"[-2000:]

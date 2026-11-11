@@ -13,7 +13,7 @@ MIN_FREE_BYTES = 1_500_000_000
 
 
 class SkipVideo(Exception):
-    """Vidéo à ne jamais traiter (Short, live) : `latest` passe à la suivante."""
+    """Video that must never be processed (Short, live): `latest` moves on to the next one."""
 
 
 def video_id_from(url_or_id):
@@ -22,7 +22,7 @@ def video_id_from(url_or_id):
         match = re.search(pattern, url_or_id.strip())
         if match:
             return match.group(1)
-    raise ValueError(f"Identifiant YouTube introuvable dans : {url_or_id}")
+    raise ValueError(f"No YouTube ID found in: {url_or_id}")
 
 
 def video_dir(video_id):
@@ -47,20 +47,20 @@ def log(folder, message):
 
 
 def run(command, attempts=1, **kwargs):
-    """Lance une commande ; en cas d'échec, réessaie puis lève une erreur avec le stderr."""
+    """Runs a command; on failure, retries, then raises an error with the stderr."""
     for attempt in range(1, attempts + 1):
         result = subprocess.run(command, capture_output=True, text=True, **kwargs)
         if result.returncode == 0:
             return result
         if attempt < attempts:
             time.sleep(10 * attempt)
-    raise RuntimeError(f"Échec de {command[:4]}... :\n{result.stderr[-2000:]}")
+    raise RuntimeError(f"{command[:4]}... failed:\n{result.stderr[-2000:]}")
 
 
 def check_free_space():
     free = shutil.disk_usage(ROOT).free
     if free < MIN_FREE_BYTES:
-        raise RuntimeError(f"Espace disque insuffisant : {free / 1e9:.1f} Go libres")
+        raise RuntimeError(f"Not enough disk space: {free / 1e9:.1f} GB free")
 
 
 def format_time(seconds):

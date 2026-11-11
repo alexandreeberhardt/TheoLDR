@@ -7,7 +7,7 @@ from .render import media_duration
 
 
 def joints(cuts):
-    """Instants des jonctions dans la vidéo raccourcie."""
+    """Times of the joints in the shortened video."""
     times = []
     elapsed = 0.0
     for cut in cuts[:-1]:
@@ -17,7 +17,7 @@ def joints(cuts):
 
 
 def contact_sheet(video_path, cuts, out_path, columns=6):
-    """Planche : pour chaque jonction, l'image juste avant et juste après la coupe."""
+    """Contact sheet: for each joint, the frame just before and just after the cut."""
     times = joints(cuts)
     if not times:
         return None
@@ -55,12 +55,12 @@ def check(folder, name, cuts):
 
 def write_post(folder, meta, selection, reports):
     lines = [
-        f"TheoLDR : {meta['title']}",
+        f"TheoLDR: {meta['title']}",
         "",
-        f"TLDR ({format_time(reports['tldr']['actual_seconds'])}) et TTLDR "
-        f"({format_time(reports['ttldr']['actual_seconds'])}) de la vidéo de {format_time(meta['duration'])}, "
-        "uniquement par coupes.",
-        f"Original : {meta['url']}",
+        f"TLDR ({format_time(reports['tldr']['actual_seconds'])}) and TTLDR "
+        f"({format_time(reports['ttldr']['actual_seconds'])}) of the {format_time(meta['duration'])} video, "
+        "made by cutting only.",
+        f"Original: {meta['url']}",
     ]
     (folder / "post.txt").write_text("\n".join(lines) + "\n")
     write_json(folder / "qa.json", {"scores": selection["scores"], "passed": selection["passed"],

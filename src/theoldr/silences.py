@@ -23,9 +23,9 @@ def detect_silences(source, out_path):
 
 
 def find_cut(silences, earliest, latest):
-    """Milieu du plus long silence (au moins MIN_CUT_SILENCE) qui chevauche [earliest, latest], ou None.
+    """Middle of the longest silence (at least MIN_CUT_SILENCE) overlapping [earliest, latest], or None.
 
-    Un silence plus court peut n'être que la fermeture d'une consonne au milieu du dernier mot."""
+    A shorter silence may just be a consonant closure in the middle of the last word."""
     best = None
     best_length = MIN_CUT_SILENCE
     for start, end in silences:
@@ -39,7 +39,7 @@ def find_cut(silences, earliest, latest):
 
 
 def mark_boundaries(sentences, silences, duration):
-    """Ajoute à chaque phrase 'cut_after' : temps de coupe propre après la phrase, ou None."""
+    """Adds 'cut_after' to each sentence: the clean cut time after the sentence, or None."""
     for index, sentence in enumerate(sentences):
         if index + 1 == len(sentences):
             sentence["cut_after"] = duration
