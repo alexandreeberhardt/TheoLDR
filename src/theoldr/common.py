@@ -12,6 +12,10 @@ CHANNEL_URL = "https://www.youtube.com/@theo/videos"
 MIN_FREE_BYTES = 1_500_000_000
 
 
+class SkipVideo(Exception):
+    """Vidéo à ne jamais traiter (Short, live) : `latest` passe à la suivante."""
+
+
 def video_id_from(url_or_id):
     patterns = [r"youtu\.be/([\w-]{11})", r"[?&]v=([\w-]{11})", r"shorts/([\w-]{11})", r"^([\w-]{11})$"]
     for pattern in patterns:

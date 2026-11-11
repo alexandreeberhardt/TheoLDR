@@ -10,6 +10,8 @@ CATEGORIES = ["sponsor", "selfpromo"]
 
 
 def fetch_sponsors(video_id, out_path):
+    """Segments SponsorBlock. Si le service est en panne, on continue sans (l'agent repère aussi
+    les sponsors) et on ne met rien en cache pour réessayer au prochain run."""
     if out_path.exists():
         return read_json(out_path)
     query = urllib.parse.urlencode({"videoID": video_id, "categories": json.dumps(CATEGORIES)})
@@ -18,8 +20,10 @@ def fetch_sponsors(video_id, out_path):
             data = json.loads(response.read())
     except urllib.error.HTTPError as error:
         if error.code != 404:
-            raise
+            return []
         data = []
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return []
     segments = [{"category": item["category"], "start": item["segment"][0], "end": item["segment"][1]}
                 for item in data]
     write_json(out_path, segments)

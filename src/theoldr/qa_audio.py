@@ -7,8 +7,8 @@ from .qa import joints
 
 MODEL = "mlx-community/whisper-small.en-mlx"
 EDGE_WORDS = 3
-WINDOW_SECONDS = 2.5
-MIN_MATCH = 0.7
+WINDOW_SECONDS = 1.5
+MIN_MATCH = 0.66
 
 
 def normalize(word):
@@ -29,15 +29,25 @@ def heard_words(media_path):
     return words
 
 
+def word_heard(word, heard_texts):
+    """Le mot attendu est-il entendu, seul ou collé au suivant (« 2.08 » entendu « 2 08 ») ?
+
+    Correspondance exacte pour les mots courts : « rain » pour « train » est justement un mot mangé."""
+    candidates = heard_texts + [a + b for a, b in zip(heard_texts, heard_texts[1:])]
+    if word in candidates:
+        return True
+    if len(word) < 6:
+        return False
+    return any(SequenceMatcher(None, word, candidate).ratio() >= 0.8 for candidate in candidates)
+
+
 def found(expected, heard, around):
-    """Part des caractères attendus retrouvés près de la jonction (tolère « 2.08 » / « 2 08 », « gonna »...)."""
-    target = "".join(normalize(word) for word in expected)
-    nearby = "".join(text for text, start, end in heard if abs(start - around) <= WINDOW_SECONDS)
-    if not target:
+    """Part des mots attendus entendus à moins de WINDOW_SECONDS de l'instant donné."""
+    expected = [normalize(word) for word in expected if normalize(word)]
+    if not expected:
         return 1.0
-    matcher = SequenceMatcher(None, target, nearby, autojunk=False)
-    matched = sum(block.size for block in matcher.get_matching_blocks())
-    return matched / len(target)
+    nearby = [text for text, start, end in heard if abs(start - around) <= WINDOW_SECONDS]
+    return sum(1 for word in expected if word_heard(word, nearby)) / len(expected)
 
 
 def check_joints(media_path, cuts, sentences):

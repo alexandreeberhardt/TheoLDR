@@ -1,7 +1,7 @@
 import json
 import sys
 
-from .common import check_free_space, log, read_json, run, write_json
+from .common import SkipVideo, check_free_space, log, read_json, run, write_json
 
 YTDLP = [sys.executable, "-m", "yt_dlp", "--js-runtimes", "node", "--no-progress", "--no-playlist"]
 VIDEO_FORMAT = "bv*[height<=720][vcodec^=avc1]+ba[ext=m4a]/b[height<=720]"
@@ -24,7 +24,8 @@ def fetch_meta(video_id, folder):
         "chapters": info.get("chapters") or [],
         "description": info.get("description") or "",
     }
-    write_json(meta_path, meta)
+    if meta["live_status"] not in ("is_live", "is_upcoming") and meta["duration"]:
+        write_json(meta_path, meta)
     return meta
 
 
@@ -40,7 +41,8 @@ def fetch_subs(video_id, folder):
         if candidate.exists():
             candidate.rename(subs_path)
             return subs_path
-    raise RuntimeError("Pas de sous-titres automatiques anglais pour cette vidéo")
+    raise RuntimeError("Pas encore de sous-titres automatiques anglais. YouTube les génère quelques minutes "
+                       "à quelques heures après la sortie : réessayer plus tard.")
 
 
 def fetch_video(video_id, folder):
@@ -56,9 +58,9 @@ def fetch_video(video_id, folder):
 def fetch(video_id, folder):
     meta = fetch_meta(video_id, folder)
     if meta["live_status"] in ("is_live", "is_upcoming"):
-        raise RuntimeError("Live en cours ou à venir : rien à faire")
+        raise RuntimeError("Live en cours ou à venir : réessayer quand la vidéo sera publiée")
     if (meta["duration"] or 0) < 180:
-        raise RuntimeError("Vidéo trop courte (Short)")
+        raise SkipVideo("Vidéo trop courte (Short)")
     log(folder, f"Vidéo : {meta['title']} ({meta['duration'] // 60} min)")
     fetch_subs(video_id, folder)
     fetch_video(video_id, folder)

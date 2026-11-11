@@ -40,12 +40,24 @@ def group_sentences(words):
         if ends_here:
             sentences.append(current)
             current = []
-        elif len(current) >= MAX_SENTENCE_WORDS and next_word and not continues_sentence(next_word):
-            sentences.append(current)
-            current = []
+        elif len(current) >= MAX_SENTENCE_WORDS:
+            head, current = split_at_longest_pause(current, next_word)
+            sentences.append(head)
     if current:
         sentences.append(current)
     return sentences
+
+
+def split_at_longest_pause(words, next_word):
+    """Phrase trop longue (sous-titres sans ponctuation) : on coupe là où l'écart entre deux mots
+    est le plus grand, en gardant au moins 15 mots de chaque côté."""
+    gaps = []
+    for index in range(15, len(words) - 15):
+        gaps.append((words[index]["start"] - words[index - 1]["start"], index))
+    if next_word:
+        gaps.append((next_word["start"] - words[-1]["start"], len(words)))
+    _, split = max(gaps)
+    return words[:split], words[split:]
 
 
 def build_transcript(subs_path, out_path, duration):

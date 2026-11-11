@@ -6,6 +6,7 @@ from .common import read_json, write_json
 NOISE_DB = -32
 MIN_SILENCE = 0.08
 MIN_TAIL_AFTER_WORD = 0.12
+MIN_CUT_SILENCE = 0.12
 
 
 def detect_silences(source, out_path):
@@ -22,9 +23,11 @@ def detect_silences(source, out_path):
 
 
 def find_cut(silences, earliest, latest):
-    """Milieu du plus long silence qui chevauche [earliest, latest], ou None."""
+    """Milieu du plus long silence (au moins MIN_CUT_SILENCE) qui chevauche [earliest, latest], ou None.
+
+    Un silence plus court peut n'être que la fermeture d'une consonne au milieu du dernier mot."""
     best = None
-    best_length = 0
+    best_length = MIN_CUT_SILENCE
     for start, end in silences:
         overlap_start = max(start, earliest)
         overlap_end = min(end, latest)

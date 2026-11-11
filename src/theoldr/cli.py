@@ -5,11 +5,11 @@ import os
 import subprocess
 import sys
 
-from .common import CHANNEL_URL, ROOT, VIDEOS_DIR, log, read_json, video_dir, video_id_from
+from .common import CHANNEL_URL, SkipVideo, ROOT, VIDEOS_DIR, log, read_json, video_dir, video_id_from, write_json
 from .fetch import YTDLP, fetch
 from .qa import check, write_post
-from .render import render_version
-from .select import select
+from .render import media_duration, render_version
+from .select import final_ranges, select
 from .silences import detect_silences, mark_boundaries
 from .sponsor import fetch_sponsors, mark_sponsors
 from .transcript import build_transcript
@@ -23,9 +23,13 @@ STEP_FILES = {
 
 def prepare(video_id, folder):
     meta = fetch(video_id, folder)
-    sentences = build_transcript(folder / "subs.json3", folder / "transcript.json", meta["duration"])
+    if "file_duration" not in meta:
+        meta["file_duration"] = media_duration(folder / "source.mp4")
+        write_json(folder / "meta.json", meta)
+    duration = meta["file_duration"]
+    sentences = build_transcript(folder / "subs.json3", folder / "transcript.json", duration)
     silences = detect_silences(folder / "source.mp4", folder / "silences.json")
-    mark_boundaries(sentences, silences, meta["duration"])
+    mark_boundaries(sentences, silences, duration)
     mark_sponsors(sentences, fetch_sponsors(video_id, folder / "sponsor.json"))
     return meta, sentences
 
@@ -46,11 +50,25 @@ def process(url_or_id, redo=None, keep_source=False):
     folder = video_dir(video_id)
     if redo:
         reset(folder, redo)
-    meta, sentences = prepare(video_id, folder)
+    for stale in ("qa.json", "post.txt", "error.txt"):
+        (folder / stale).unlink(missing_ok=True)
+    try:
+        meta, sentences = prepare(video_id, folder)
+        return finish(video_id, folder, meta, sentences, keep_source)
+    except Exception as error:
+        if isinstance(error, SkipVideo):
+            (folder / "error.txt").write_text(f"{error}\n")
+        log(folder, f"Échec : {error}")
+        notify(f"Échec sur {video_id} : {str(error)[:80]}")
+        raise
+
+
+def finish(video_id, folder, meta, sentences, keep_source):
     selection = select(sentences, meta, folder)
+    ranges = final_ranges(sentences, selection, folder)
     reports = {}
     for name in ("tldr", "ttldr"):
-        cuts = render_version(folder, sentences, selection[name], name)
+        cuts = render_version(folder, sentences, ranges[name], name)
         reports[name] = check(folder, name, cuts)
         reports[name]["joints"] = audio_joints(folder, name, cuts, sentences)
     write_post(folder, meta, selection, reports)
@@ -69,10 +87,15 @@ def process(url_or_id, redo=None, keep_source=False):
 def audio_joints(folder, name, cuts, sentences):
     """Contrôle Whisper des jonctions, si l'extra 'qa' est installé (uv sync --extra qa)."""
     try:
+        import mlx_whisper  # noqa: F401
         from .qa_audio import check_joints
     except ImportError:
         return None
-    return check_joints(folder / f"{name}.mp4", cuts, sentences)
+    try:
+        return check_joints(folder / f"{name}.mp4", cuts, sentences)
+    except Exception as error:
+        log(folder, f"Contrôle Whisper impossible : {error}")
+        return None
 
 
 def notify(message):
@@ -97,7 +120,12 @@ def status():
         meta_path = folder / "meta.json"
         title = read_json(meta_path)["title"] if meta_path.exists() else "?"
         qa_path = folder / "qa.json"
-        state = "fait" if qa_path.exists() else "en cours ou échoué"
+        if qa_path.exists():
+            state = "fait"
+        elif (folder / "error.txt").exists():
+            state = "échec"
+        else:
+            state = "en cours"
         print(f"{folder.name}  {state:20}  {title}")
 
 
@@ -125,10 +153,14 @@ def main():
     if args.command == "run":
         folder = process(args.video, args.redo, args.keep_source)
     else:
-        video_id, title = latest_long_videos()[0]
-        if (VIDEOS_DIR / video_id / "qa.json").exists():
-            print(f"Rien de nouveau : la dernière vidéo ({title}) est déjà traitée.")
+        pending = [(video_id, title) for video_id, title in latest_long_videos()
+                   if not (VIDEOS_DIR / video_id / "qa.json").exists()
+                   and not (VIDEOS_DIR / video_id / "error.txt").exists()]
+        if not pending:
+            print("Rien de nouveau : les dernières vidéos sont déjà traitées "
+                  "(celles en échec se relancent avec `theoldr run <id>`).")
             return
+        video_id, title = pending[0]
         print(f"Traitement de : {title}")
         folder = process(video_id, keep_source=args.keep_source)
     print(f"Résultats : {folder}")

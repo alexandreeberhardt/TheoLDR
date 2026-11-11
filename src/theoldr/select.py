@@ -1,3 +1,4 @@
+import hashlib
 import json
 from concurrent.futures import ThreadPoolExecutor
 
@@ -150,16 +151,16 @@ def normalize(video, raw_ranges):
 
     snapped = []
     for first, last in clean:
-        original = (first, last)
-        while not video.can_start(first):
-            first -= 1
-        while not video.can_end(last):
-            last += 1
-        if (first, last) != original:
-            notes.append(f"Range {video.sentences[original[0]]['id']}-{video.sentences[original[1]]['id']} "
-                         f"extended to {video.sentences[first]['id']}-{video.sentences[last]['id']} "
+        bounds = snap(video, first, last)
+        if bounds is None:
+            notes.append(f"Range {video.sentences[first]['id']}-{video.sentences[last]['id']} has no clean cut "
+                         "without touching a sponsor: dropped.")
+            continue
+        if bounds != (first, last):
+            notes.append(f"Range {video.sentences[first]['id']}-{video.sentences[last]['id']} "
+                         f"adjusted to {video.sentences[bounds[0]]['id']}-{video.sentences[bounds[1]]['id']} "
                          f"to land on clean cuts.")
-        snapped.append([first, last])
+        snapped.append(list(bounds))
 
     snapped.sort()
     merged = []
@@ -167,11 +168,35 @@ def normalize(video, raw_ranges):
         if merged:
             previous = merged[-1]
             gap = video.cut_before(first) - video.cut_after(previous[1])
-            if first <= previous[1] + 1 or gap < MERGE_GAP_SECONDS:
+            sponsor_between = any(video.sentences[position].get("sponsor")
+                                  for position in range(previous[1] + 1, first))
+            if first <= previous[1] + 1 or (gap < MERGE_GAP_SECONDS and not sponsor_between):
                 previous[1] = max(previous[1], last)
                 continue
         merged.append([first, last])
     return merged, notes
+
+
+def snap(video, first, last):
+    """Cale une plage sur des coupes propres : on l'élargit, sauf si cela fait entrer un sponsor,
+    auquel cas on la rétrécit. Renvoie None si plus rien ne reste."""
+    start = first
+    while not video.can_start(start) and not video.sentences[start - 1].get("sponsor"):
+        start -= 1
+    if not video.can_start(start):
+        start = first
+        while start <= last and not video.can_start(start):
+            start += 1
+    end = last
+    while not video.can_end(end) and not video.sentences[end + 1].get("sponsor"):
+        end += 1
+    if not video.can_end(end):
+        end = last
+        while end >= start and not video.can_end(end):
+            end -= 1
+    if start > end:
+        return None
+    return start, end
 
 
 def total_seconds(video, pairs):
@@ -216,13 +241,31 @@ def ranges_as_ids(video, pairs):
              "seconds": round(video.cut_after(last) - video.cut_before(first), 1)} for first, last in pairs]
 
 
+def fingerprint(sentences):
+    """Empreinte des phrases : si le transcript change, les identifiants S0123 ne désignent plus
+    les mêmes phrases et le plan comme la sélection doivent être refaits."""
+    content = json.dumps([[sentence["id"], sentence["text"]] for sentence in sentences])
+    return hashlib.sha1(content.encode()).hexdigest()[:16]
+
+
+def load_if_current(path, sentences):
+    if not path.exists():
+        return None
+    data = read_json(path)
+    if data.get("fingerprint") != fingerprint(sentences):
+        return None
+    return data
+
+
 def make_outline(video, meta, folder):
     path = folder / "outline.json"
-    if path.exists():
-        return read_json(path)
+    outline = load_if_current(path, video.sentences)
+    if outline:
+        return outline
     text = (f"Title: {meta['title']}\nDuration: {format_time(meta['duration'])}\n\n"
             f"Transcript:\n{video.transcript_text(with_cut_marks=False)}")
     outline = ask(prompt("outline"), text, OUTLINE_SCHEMA)
+    outline["fingerprint"] = fingerprint(video.sentences)
     write_json(path, outline)
     return outline
 
@@ -291,21 +334,27 @@ def evaluate(reviews, problems):
 
 
 def feedback_text(notes, problems, reviews):
-    """Ne renvoie à l'agent que ce qui doit être corrigé : durée et problèmes bloquants."""
+    """Ne renvoie à l'agent que ce qui doit être corrigé : durée, problèmes bloquants,
+    et déformations si la fidélité est insuffisante."""
+    issues = []
+    for issue in reviews["blind"]["issues"]:
+        if issue["blocking"]:
+            issues.append(f"- segment {issue.get('segment')}: \"{issue['quote']}\" -> {issue['type']} "
+                          f"(first-time viewer): {issue['fix']}")
+    low_fidelity = reviews["fidelity"]["fidelity_score"] < 8
+    for issue in reviews["fidelity"]["issues"]:
+        if issue["blocking"] or (low_fidelity and issue["type"] in ("distortion", "missing_caveat")):
+            issues.append(f"- {', '.join(issue['sentence_ids'])}: {issue['type']} "
+                          f"(reviewer who knows the full video): {issue['fix']}")
+    if low_fidelity and not issues:
+        for issue in reviews["fidelity"]["issues"][:3]:
+            issues.append(f"- {', '.join(issue['sentence_ids'])}: {issue['type']}: {issue['fix']}")
     lines = []
     if problems:
         lines.append("LENGTH: " + " ".join(problems))
     if notes:
         lines.append("AUTOMATIC ADJUSTMENTS: " + " ".join(notes))
-    for issue in reviews["blind"]["issues"]:
-        if issue["blocking"]:
-            lines.append(f"- segment {issue.get('segment')}: \"{issue['quote']}\" -> {issue['type']} "
-                         f"(first-time viewer): {issue['fix']}")
-    for issue in reviews["fidelity"]["issues"]:
-        if issue["blocking"]:
-            lines.append(f"- {', '.join(issue['sentence_ids'])}: {issue['type']} "
-                         f"(reviewer who knows the full video): {issue['fix']}")
-    return "\n".join(lines)
+    return "\n".join(lines + issues)
 
 
 def selection_loop(video, folder, name, context, budget, target_seconds=None, allowed=None):
@@ -323,15 +372,23 @@ def selection_loop(video, folder, name, context, budget, target_seconds=None, al
             pairs = clipped
         seconds = total_seconds(video, pairs)
         problems = length_problems(name, seconds, target_seconds)
-        reviews = review(video, name, pairs, budget)
-        scores, blocking, passed, total = evaluate(reviews, problems)
+        if pairs:
+            reviews = review(video, name, pairs, budget)
+            scores, blocking, passed, total = evaluate(reviews, problems)
+        else:
+            reviews = {"blind": {"score": 0, "issues": []}, "fidelity": {"fidelity_score": 0, "coverage_score": 0,
+                                                                          "issues": []}}
+            scores, blocking, passed, total = {"flow": 0, "fidelity": 0, "coverage": 0}, [], False, -100
+            problems.append("The selection is empty after removing sponsors and parts outside the allowed text.")
+        in_bounds = not any("outside the limits" in problem for problem in problems)
         attempt = {"round": round_number, "raw": raw, "notes": notes, "length_problems": problems,
                    "ranges": ranges_as_ids(video, pairs), "seconds": round(seconds, 1), "reviews": reviews,
-                   "scores": scores, "blocking": len(blocking), "passed": passed, "total": total}
+                   "scores": scores, "blocking": len(blocking), "passed": passed, "total": total,
+                   "rank": (passed, bool(pairs), in_bounds, total)}
         write_json(folder / "attempts" / f"{name}_round{round_number}.json", attempt)
         log(folder, f"{name.upper()} tour {round_number} : {seconds:.0f} s, {len(pairs)} segments, "
                     f"scores {scores}, bloquants {len(blocking)}")
-        if best is None or total > best["total"]:
+        if best is None or attempt["rank"] > best["rank"]:
             best = attempt
         if passed:
             break
@@ -344,8 +401,9 @@ def selection_loop(video, folder, name, context, budget, target_seconds=None, al
 
 def select(sentences, meta, folder):
     path = folder / "selection.json"
-    if path.exists():
-        return read_json(path)
+    selection = load_if_current(path, sentences)
+    if selection:
+        return selection
     video = Video(sentences)
     outline = make_outline(video, meta, folder)
     apply_extra_sponsors(video, outline)
@@ -373,6 +431,22 @@ def select(sentences, meta, folder):
                    "tldr_fidelity": tldr["scores"]["fidelity"], "ttldr_fidelity": ttldr["scores"]["fidelity"],
                    "tldr_coverage": tldr["scores"]["coverage"], "ttldr_coverage": ttldr["scores"]["coverage"]},
         "passed": tldr["passed"] and ttldr["passed"],
+        "fingerprint": fingerprint(sentences),
     }
     write_json(path, selection)
     return selection
+
+
+def final_ranges(sentences, selection, folder):
+    """Revalide les plages avant le rendu (utile après une retouche à la main de selection.json) :
+    coupes propres, pas de sponsor, ordre, et TTLDR inclus dans le TLDR."""
+    video = Video(sentences)
+    outline_path = folder / "outline.json"
+    if outline_path.exists():
+        apply_extra_sponsors(video, read_json(outline_path))
+    tldr, _ = normalize(video, selection["tldr"])
+    ttldr, _ = normalize(video, selection["ttldr"])
+    ttldr = clip_to(ttldr, tldr)
+    if not tldr or not ttldr:
+        raise RuntimeError("Sélection vide après validation : impossible de rendre la vidéo")
+    return {"tldr": ranges_as_ids(video, tldr), "ttldr": ranges_as_ids(video, ttldr)}
