@@ -52,14 +52,27 @@ def process(url_or_id, redo=None, keep_source=False):
     for name in ("tldr", "ttldr"):
         cuts = render_version(folder, sentences, selection[name], name)
         reports[name] = check(folder, name, cuts)
+        reports[name]["joints"] = audio_joints(folder, name, cuts, sentences)
     write_post(folder, meta, selection, reports)
     log(folder, f"Terminé : TLDR {reports['tldr']['actual_seconds'] / 60:.1f} min, "
                 f"TTLDR {reports['ttldr']['actual_seconds']:.0f} s, scores {selection['scores']}")
     all_ok = all(report["duration_ok"] for report in reports.values())
+    bad_joints = sum(1 for report in reports.values() for joint in report["joints"] or [] if not joint["ok"])
+    if bad_joints:
+        log(folder, f"Attention : {bad_joints} jonction(s) où Whisper n'entend pas les mots attendus (voir qa.json)")
     if all_ok and not keep_source:
         (folder / "source.mp4").unlink()
     notify(f"{meta['title']} : TLDR et TTLDR prêts")
     return folder
+
+
+def audio_joints(folder, name, cuts, sentences):
+    """Contrôle Whisper des jonctions, si l'extra 'qa' est installé (uv sync --extra qa)."""
+    try:
+        from .qa_audio import check_joints
+    except ImportError:
+        return None
+    return check_joints(folder / f"{name}.mp4", cuts, sentences)
 
 
 def notify(message):

@@ -7,3 +7,5 @@ A short version necessarily skips most of the original: judge whether what is th
 Judge:
 - `score` from 1 to 10: can a viewer follow it, understand the topic and Theo's point, without feeling lost? 10 = flows like a natural, tight video. 7 = understandable with a few jarring jumps. 4 = confusing.
 - `issues`: each concrete problem, with the exact quote where it occurs, the `segment` number (segments are numbered in the text), the type (dangling_reference, missing_context, abrupt_start, abrupt_end, non_sequitur, too_choppy, filler) and a fix expressed as cutting more or keeping a nearby part of the original (you may say "keep what explains X before this segment"). `blocking`: true only if a viewer would genuinely be lost or misled about what Theo means (a reference to something never shown, a claim that reads as the opposite of his view). Mere abruptness or a slightly sudden ending is never blocking. List at most 6 issues, most important first. Prefer fixes that cut over fixes that add.
+
+`>>` marks a change of speaker (Theo sometimes plays clips of other people).

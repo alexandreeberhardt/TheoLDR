@@ -3,7 +3,7 @@ import re
 from .common import read_json, write_json
 
 SENTENCE_END = re.compile(r"[.?!][\"')\]]*$")
-MAX_SENTENCE_WORDS = 60
+MAX_SENTENCE_WORDS = 70
 NOISE = re.compile(r"^\[.*\]$")
 
 
@@ -25,12 +25,22 @@ def load_words(subs_path):
     return words
 
 
+def continues_sentence(word):
+    """Un mot qui commence par une minuscule prolonge la phrase : le point était une erreur des sous-titres."""
+    return word["text"][0].islower()
+
+
 def group_sentences(words):
     sentences = []
     current = []
-    for word in words:
+    for position, word in enumerate(words):
         current.append(word)
-        if SENTENCE_END.search(word["text"]) or len(current) >= MAX_SENTENCE_WORDS:
+        next_word = words[position + 1] if position + 1 < len(words) else None
+        ends_here = SENTENCE_END.search(word["text"]) and not (next_word and continues_sentence(next_word))
+        if ends_here:
+            sentences.append(current)
+            current = []
+        elif len(current) >= MAX_SENTENCE_WORDS and next_word and not continues_sentence(next_word):
             sentences.append(current)
             current = []
     if current:

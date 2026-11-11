@@ -18,3 +18,5 @@ Rules for good cuts:
 For each range give the first and last sentence IDs and a short reason. Also give `tldr_estimated_seconds` and `ttldr_estimated_seconds`.
 
 When you revise a selection after feedback: to fix a dangling reference or missing context, prefer removing the problematic part, unless it carries a core point, in which case add the context it needs. Every addition must fit the time budget: cut something weaker to make room. Do not fragment further to squeeze more points in.
+
+`>>` in the transcript marks a change of speaker. Theo often plays clips of other people (videos, interviews) and reacts to them: text after `>>` may not be Theo. Never present someone else's words as Theo's opinion.

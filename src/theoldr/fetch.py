@@ -12,7 +12,7 @@ def fetch_meta(video_id, folder):
     if meta_path.exists():
         return read_json(meta_path)
     url = f"https://www.youtube.com/watch?v={video_id}"
-    result = run(YTDLP + ["--dump-single-json", "--skip-download", url])
+    result = run(YTDLP + ["--dump-single-json", "--skip-download", url], attempts=3)
     info = json.loads(result.stdout)
     meta = {
         "id": video_id,
@@ -35,7 +35,7 @@ def fetch_subs(video_id, folder):
     url = f"https://www.youtube.com/watch?v={video_id}"
     for lang in ["en-orig", "en"]:
         run(YTDLP + ["--skip-download", "--write-auto-subs", "--sub-format", "json3",
-                     "--sub-langs", lang, "-o", str(folder / "subs"), url])
+                     "--sub-langs", lang, "-o", str(folder / "subs"), url], attempts=3)
         candidate = folder / f"subs.{lang}.json3"
         if candidate.exists():
             candidate.rename(subs_path)
@@ -49,7 +49,7 @@ def fetch_video(video_id, folder):
         return source
     check_free_space()
     url = f"https://www.youtube.com/watch?v={video_id}"
-    run(YTDLP + ["-f", VIDEO_FORMAT, "--merge-output-format", "mp4", "-o", str(source), url])
+    run(YTDLP + ["-f", VIDEO_FORMAT, "--merge-output-format", "mp4", "-o", str(source), url], attempts=3)
     return source
 
 

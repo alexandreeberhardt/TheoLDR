@@ -12,3 +12,5 @@ Produce:
 - `key_moments`: the 5 to 12 moments a viewer must not miss (facts, numbers, test results, strong opinions, the verdict), with the sentence IDs that carry them.
 - `density`: low, medium or high (how much substance per minute; reading long passages, waiting on demos and repetition lower it).
 - `tldr_target_minutes`: target length of the shortened video, between 5 and 15. Roughly 15-25% of the original for a dense video, less for a padded one. Never more than 40% of the original.
+
+`>>` in the transcript marks a change of speaker. Theo often plays clips of other people (videos, interviews) and reacts to them: text after `>>` may not be Theo. Never present someone else's words as Theo's opinion.

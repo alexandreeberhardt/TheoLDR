@@ -42,8 +42,15 @@ def log(folder, message):
         handle.write(line + "\n")
 
 
-def run(command, **kwargs):
-    return subprocess.run(command, check=True, capture_output=True, text=True, **kwargs)
+def run(command, attempts=1, **kwargs):
+    """Lance une commande ; en cas d'échec, réessaie puis lève une erreur avec le stderr."""
+    for attempt in range(1, attempts + 1):
+        result = subprocess.run(command, capture_output=True, text=True, **kwargs)
+        if result.returncode == 0:
+            return result
+        if attempt < attempts:
+            time.sleep(10 * attempt)
+    raise RuntimeError(f"Échec de {command[:4]}... :\n{result.stderr[-2000:]}")
 
 
 def check_free_space():
