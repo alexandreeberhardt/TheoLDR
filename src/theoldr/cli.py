@@ -87,10 +87,8 @@ def finish(video_id, folder, meta, sentences, keep_source):
 
 def audio_joints(folder, name, cuts, sentences):
     """Whisper check of the joints, if the 'qa' extra is installed (uv sync --extra qa)."""
-    try:
-        import mlx_whisper  # noqa: F401
-        from .qa_audio import check_joints
-    except ImportError:
+    from .qa_audio import check_joints, whisper_available
+    if not whisper_available():
         return None
     try:
         return check_joints(folder / f"{name}.mp4", cuts, sentences)

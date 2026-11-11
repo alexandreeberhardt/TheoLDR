@@ -1,11 +1,13 @@
 """Joint check: transcribes the shortened video again and checks that the words
 on both sides of each cut are heard (no swallowed or clipped word)."""
 import re
+import subprocess
 from difflib import SequenceMatcher
 
 from .qa import joints
 
-MODEL = "mlx-community/whisper-small.en-mlx"
+MLX_MODEL = "mlx-community/whisper-small.en-mlx"
+FASTER_WHISPER_MODEL = "small.en"
 EDGE_WORDS = 3
 WINDOW_SECONDS = 1.5
 MIN_MATCH = 0.66
@@ -24,17 +26,54 @@ def spoken_words(text):
     return [word for word in text.replace("[", " [").replace("]", "] ").split() if not ANNOTATION.match(word)]
 
 
-def heard_words(media_path):
-    import mlx_whisper
+def whisper_available():
+    """The 'qa' extra installs mlx-whisper on Apple Silicon and faster-whisper elsewhere."""
+    for module in ("mlx_whisper", "faster_whisper"):
+        try:
+            __import__(module)
+            return True
+        except ImportError:
+            pass
+    return False
 
-    result = mlx_whisper.transcribe(str(media_path), path_or_hf_repo=MODEL, word_timestamps=True,
+
+def raw_words(media_path):
+    """(word, start, end) for each word Whisper hears."""
+    try:
+        import mlx_whisper
+    except ImportError:
+        return faster_whisper_words(media_path)
+    result = mlx_whisper.transcribe(str(media_path), path_or_hf_repo=MLX_MODEL, word_timestamps=True,
                                     condition_on_previous_text=False)
+    return [(word["word"], word["start"], word["end"])
+            for segment in result["segments"] for word in segment.get("words", [])]
+
+
+def faster_whisper_words(media_path):
+    """Audio decoded by ffmpeg rather than by faster-whisper (PyAV breaks between versions)."""
+    import numpy
+    from faster_whisper import WhisperModel
+    pcm = subprocess.run(["ffmpeg", "-v", "error", "-i", str(media_path), "-f", "f32le", "-ac", "1",
+                          "-ar", "16000", "-"], capture_output=True, check=True).stdout
+    audio = numpy.frombuffer(pcm, dtype=numpy.float32)
+    try:
+        return transcribe_with(WhisperModel(FASTER_WHISPER_MODEL, device="auto", compute_type="auto"), audio)
+    except RuntimeError:
+        # NVIDIA card without the CUDA 12 / cuDNN libraries: fall back to the CPU.
+        return transcribe_with(WhisperModel(FASTER_WHISPER_MODEL, device="cpu", compute_type="int8"), audio)
+
+
+def transcribe_with(model, audio):
+    segments, _ = model.transcribe(audio, word_timestamps=True, condition_on_previous_text=False)
+    return [(word.word, float(word.start), float(word.end)) for segment in segments for word in segment.words or []]
+
+
+def heard_words(media_path):
     words = []
-    for segment in result["segments"]:
-        for word in segment.get("words", []):
-            text = normalize(word["word"])
-            if text:
-                words.append((text, word["start"], word["end"]))
+    for word, start, end in raw_words(media_path):
+        text = normalize(word)
+        if text:
+            words.append((text, start, end))
     return words
 
 
