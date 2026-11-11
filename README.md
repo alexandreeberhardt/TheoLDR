@@ -10,7 +10,7 @@ TheoLDR shortens [Theo's](https://www.youtube.com/@theo) YouTube videos **by cut
 
 ## Demo
 
-Start with the TTLDR, then compare with the original.
+Start with the TTLDR, then compare with the original. Both short versions are unlisted on YouTube.
 
 | [Coding Isn't About Code Anymore](https://youtu.be/GtJKFhztgdM) | Length |
 |---|---:|
