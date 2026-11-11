@@ -15,8 +15,18 @@ RANGE_SCHEMA = {
     "type": "array",
     "items": {
         "type": "object",
-        "properties": {"first": {"type": "string"}, "last": {"type": "string"}, "reason": {"type": "string"}},
-        "required": ["first", "last", "reason"],
+        "properties": {
+            "first": {"type": "string"},
+            "last": {"type": "string"},
+            "reason": {"type": "string"},
+            "start_check": {"type": "string", "description": (
+                "Does the first sentence refer to anything cut (this, that, so, he, the second...)? "
+                "Say what it refers to and confirm it is kept or not needed.")},
+            "end_check": {"type": "string", "description": (
+                "Quote the first sentence AFTER this range in the original and say why cutting it is safe "
+                "(it must not be a punchline, a reversal like 'Not quite' or 'But', or a key caveat).")},
+        },
+        "required": ["first", "last", "reason", "start_check", "end_check"],
     },
 }
 

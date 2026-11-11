@@ -10,6 +10,6 @@ Rules:
 3. Never distort Theo's position (sarcasm, setups without punchlines, other people's quotes). `>>` marks a change of speaker: Theo plays clips of other people; never keep a clip without Theo's line saying what it is.
 4. Respect 60 to 120 seconds. Durations are given; add them up carefully.
 
-For each range give the first and last sentence IDs and a short reason, and give `estimated_seconds`.
+For each range give the first and last sentence IDs, a short reason, a `start_check` and an `end_check`. Do these checks for real, by reading the original around each boundary: the most common mistake is ending a range right before Theo reverses or qualifies what he just said ("Not quite.", "But...", "Just kidding", "That's what they claim"). If the check fails, move the boundary. and give `estimated_seconds`.
 
 When you revise after feedback: fix only the problems listed, preferably by removing the problematic part or by swapping it for a clearer stretch of similar length.

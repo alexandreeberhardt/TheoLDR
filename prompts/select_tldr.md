@@ -14,6 +14,6 @@ Rules for good cuts:
 7. Cut: sponsor reads, self-promotion, "like and subscribe", repetition of a point already made, waiting for a demo to load, long tangents, rambling restarts ("wait, let me...").
 8. Respect the target length. Durations of each sentence are given; add them up carefully.
 
-For each range give the first and last sentence IDs and a short reason, and give `estimated_seconds`.
+For each range give the first and last sentence IDs, a short reason, a `start_check` and an `end_check`. Do these checks for real, by reading the original around each boundary: the most common mistake is ending a range right before Theo reverses or qualifies what he just said ("Not quite.", "But...", "Just kidding", "That's what they claim"). If the check fails, move the boundary. and give `estimated_seconds`.
 
 When you revise a selection after feedback: to fix a dangling reference or missing context, prefer removing the problematic part, unless it carries a core point, in which case add the context it needs. Every addition must fit the time budget: cut something weaker to make room. Do not fragment further to squeeze more points in.
