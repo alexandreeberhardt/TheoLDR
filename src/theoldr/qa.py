@@ -62,6 +62,6 @@ def write_post(folder, meta, selection, reports):
         "made by cutting only.",
         f"Original: {meta['url']}",
     ]
-    (folder / "post.txt").write_text("\n".join(lines) + "\n")
+    (folder / "post.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
     write_json(folder / "qa.json", {"scores": selection["scores"], "passed": selection["passed"],
                                     "rounds": selection["rounds"], **reports})

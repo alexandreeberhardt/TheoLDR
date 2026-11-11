@@ -14,7 +14,7 @@ def detect_silences(source, out_path):
         return read_json(out_path)
     command = ["ffmpeg", "-hide_banner", "-nostats", "-i", str(source), "-vn",
                "-af", f"silencedetect=n={NOISE_DB}dB:d={MIN_SILENCE}", "-f", "null", "-"]
-    output = subprocess.run(command, capture_output=True, text=True, check=True).stderr
+    output = subprocess.run(command, capture_output=True, encoding="utf-8", errors="replace", check=True).stderr
     starts = [float(value) for value in re.findall(r"silence_start: ([\d.]+)", output)]
     ends = [float(value) for value in re.findall(r"silence_end: ([\d.]+)", output)]
     silences = [[round(start, 3), round(end, 3)] for start, end in zip(starts, ends)]

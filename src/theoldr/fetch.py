@@ -3,7 +3,8 @@ import sys
 
 from .common import SkipVideo, check_free_space, log, read_json, run, write_json
 
-YTDLP = [sys.executable, "-m", "yt_dlp", "--js-runtimes", "node", "--no-progress", "--no-playlist"]
+YTDLP = [sys.executable, "-m", "yt_dlp", "--encoding", "utf-8", "--js-runtimes", "node",
+         "--no-progress", "--no-playlist"]
 VIDEO_FORMAT = "bv*[height<=720][vcodec^=avc1]+ba[ext=m4a]/b[height<=720]"
 
 

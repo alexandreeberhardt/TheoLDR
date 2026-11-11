@@ -58,7 +58,7 @@ def process(url_or_id, redo=None, keep_source=False):
         return finish(video_id, folder, meta, sentences, keep_source)
     except Exception as error:
         if isinstance(error, SkipVideo):
-            (folder / "error.txt").write_text(f"{error}\n")
+            (folder / "error.txt").write_text(f"{error}\n", encoding="utf-8")
         log(folder, f"Failed: {error}")
         notify(f"Failed on {video_id}: {str(error)[:80]}")
         raise
@@ -102,7 +102,7 @@ def audio_joints(folder, name, cuts, sentences):
 def latest_long_videos(count=5):
     result = subprocess.run(YTDLP + ["--flat-playlist", "--playlist-end", str(count),
                                      "--print", "%(id)s|%(duration)s|%(title)s", CHANNEL_URL],
-                            capture_output=True, text=True, check=True)
+                            capture_output=True, encoding="utf-8", errors="replace", check=True)
     videos = []
     for line in result.stdout.strip().splitlines():
         video_id, duration, title = line.split("|", 2)
@@ -136,6 +136,8 @@ def main():
     latest_parser.add_argument("--keep-source", action="store_true")
     commands.add_parser("status", help="list processed videos")
     args = parser.parse_args()
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(encoding="utf-8", errors="replace")  # Windows uses cp1252 when output is redirected
 
     if args.command == "status":
         status()

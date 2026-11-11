@@ -82,7 +82,7 @@ FIDELITY_SCHEMA = {
 
 
 def prompt(name):
-    return (PROMPTS_DIR / f"{name}.md").read_text()
+    return (PROMPTS_DIR / f"{name}.md").read_text(encoding="utf-8")
 
 
 class Video:

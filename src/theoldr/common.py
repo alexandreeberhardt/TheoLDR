@@ -32,24 +32,24 @@ def video_dir(video_id):
 
 
 def read_json(path):
-    return json.loads(Path(path).read_text())
+    return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
 def write_json(path, data):
-    Path(path).write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    Path(path).write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def log(folder, message):
     line = f"[{time.strftime('%H:%M:%S')}] {message}"
     print(line, flush=True)
-    with open(Path(folder) / "log.txt", "a") as handle:
+    with open(Path(folder) / "log.txt", "a", encoding="utf-8") as handle:
         handle.write(line + "\n")
 
 
 def run(command, attempts=1, **kwargs):
     """Runs a command; on failure, retries, then raises an error with the stderr."""
     for attempt in range(1, attempts + 1):
-        result = subprocess.run(command, capture_output=True, text=True, **kwargs)
+        result = subprocess.run(command, capture_output=True, encoding="utf-8", errors="replace", **kwargs)
         if result.returncode == 0:
             return result
         if attempt < attempts:

@@ -45,7 +45,7 @@ def render(source, cuts, out_path):
                    "-filter_complex", filter_graph(shifted), "-map", "[v]", "-map", "[a]",
                    *encoder, "-b:v", VIDEO_BITRATE, "-c:a", "aac", "-b:a", "160k",
                    "-movflags", "+faststart", str(temporary)]
-        result = subprocess.run(command, capture_output=True, text=True)
+        result = subprocess.run(command, capture_output=True, encoding="utf-8", errors="replace")
         if result.returncode == 0:
             temporary.replace(out_path)
             return

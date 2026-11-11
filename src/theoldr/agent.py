@@ -44,8 +44,8 @@ def call_once(command, user_text):
     """Returns the structured output, or a text describing the problem."""
     try:
         with tempfile.TemporaryDirectory() as empty_dir:
-            result = subprocess.run(command, input=user_text, capture_output=True, text=True,
-                                    cwd=empty_dir, timeout=CALL_TIMEOUT_SECONDS)
+            result = subprocess.run(command, input=user_text, capture_output=True, encoding="utf-8",
+                                    errors="replace", cwd=empty_dir, timeout=CALL_TIMEOUT_SECONDS)
     except subprocess.TimeoutExpired:
         return f"Timed out after {CALL_TIMEOUT_SECONDS // 60} min"
     try:
