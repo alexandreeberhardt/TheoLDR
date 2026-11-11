@@ -48,7 +48,7 @@ Finally, Whisper listens to the finished video and checks that the words on both
 
 ## Quick start
 
-You need macOS on Apple Silicon, [uv](https://docs.astral.sh/uv/), `ffmpeg`, `node` and a logged-in [Claude Code](https://claude.com/claude-code) CLI.
+Works on macOS, Linux and Windows. You need [uv](https://docs.astral.sh/uv/), `ffmpeg`, `node` and a logged-in [Claude Code](https://claude.com/claude-code) CLI (on Windows, use its native installer). The Whisper check runs on MLX on Apple Silicon and on [faster-whisper](https://github.com/SYSTRAN/faster-whisper) elsewhere.
 
 ```bash
 git clone https://github.com/alexandreeberhardt/TheoLDR.git && cd TheoLDR

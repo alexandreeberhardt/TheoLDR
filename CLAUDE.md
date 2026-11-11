@@ -9,6 +9,7 @@ uv run --extra qa theoldr run <url|id>    # a specific video
 uv run theoldr status                     # processed videos
 ```
 Without `--extra qa`, everything works except the Whisper check of the joints.
+Runs on macOS, Linux and Windows. OS-specific code lives in `system.py`; the Whisper check uses MLX on Apple Silicon and faster-whisper elsewhere. Tests (no network, no Claude): `uv run pytest`, also run by the CI on all three systems.
 Time: 5 to 15 min per video, mostly the Claude calls. A video already done is not processed again without `--redo`.
 Right after a video comes out, YouTube sometimes has no auto captions yet: the tool says so, just run it again later.
 
