@@ -73,7 +73,7 @@ uv run --extra qa theoldr run <url-or-id>     # a specific video
 uv run theoldr status                         # what has been processed
 ```
 
-A run takes 5 to 15 minutes, mostly Claude calls (Opus, through your Claude Code login). Each step saves its result, so a crashed run picks up where it stopped. You get these files in `videos/<id>/`:
+A run takes 5 to 15 minutes, mostly Claude calls (Opus, through your Claude Code login). Right after a release YouTube may have no captions yet: TheoLDR then transcribes the video itself with Whisper, which adds about a minute per 15 minutes of video. Whisper does not mark who is speaking, so watch reaction videos more closely in that case. Each step saves its result, so a crashed run picks up where it stopped. You get these files in `videos/<id>/`:
 
 - `tldr.mp4` (5 to 15 min) and `ttldr.mp4` (1 to 2 min)
 - `post.txt`, a draft post with a link to the original

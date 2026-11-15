@@ -11,14 +11,14 @@ uv run theoldr status                     # processed videos
 Without `--extra qa`, everything works except the Whisper check of the joints.
 Runs on macOS, Linux and Windows. OS-specific code lives in `system.py`; the Whisper check uses MLX on Apple Silicon and faster-whisper elsewhere. Tests (no network, no Claude): `uv run pytest`, also run by the CI on all three systems.
 Time: 5 to 15 min per video, mostly the Claude calls. A video already done is not processed again without `--redo`.
-Right after a video comes out, YouTube sometimes has no auto captions yet: the tool says so, just run it again later.
+Right after a video comes out, YouTube sometimes has no auto captions yet: the tool then transcribes the video itself with Whisper (about 1 min per 15 min of video on an M4; needs the `qa` extra). `--whisper-captions` forces this. Whisper does not mark speaker changes with `>>`, so the agents get a note saying so: on a reaction video, check that no clip of someone else is presented as Theo.
 
 ## Steps and files (`videos/<id>/`)
 Each step writes its file and is skipped if that file already exists. After a crash, run the same command again.
 
 | Step | File | Module |
 |---|---|---|
-| metadata, json3 auto captions, 720p video | `meta.json`, `subs.json3`, `source.mp4` | `fetch.py` |
+| metadata, json3 auto captions (YouTube's, or Whisper's in the same layout), 720p video | `meta.json`, `subs.json3`, `source.mp4` | `fetch.py` |
 | timestamped sentences | `transcript.json` | `transcript.py` |
 | silences, possible clean cuts after each sentence | `silences.json` | `silences.py` |
 | sponsors (SponsorBlock) | `sponsor.json` | `sponsor.py` |
