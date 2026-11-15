@@ -1,6 +1,6 @@
 # TheoLDR: guide for an agent
 
-A tool that shortens Theo's (@theo) YouTube videos **by cutting only**: nothing added, nothing reordered. Two outputs per video: `tldr.mp4` (5 to 15 min) and `ttldr.mp4` (1 to 2 min). Theo has agreed; posting on X is done by hand.
+A tool that shortens Theo's (@theo) YouTube videos **by cutting only**: nothing added, nothing reordered. Two outputs per video: `tldr.mp4` (5 to 15 min) and `ttldr.mp4` (1 to 2 min). Posting on X is done by hand.
 
 ## Running
 ```
@@ -33,7 +33,7 @@ Each step writes its file and is skipped if that file already exists. After a cr
 - `--redo select`: redoes the outline and the selection (after a prompt change).
 - `--redo selection`: keeps the outline, redoes the selection.
 - `--redo render`: redoes only the render.
-- Manual edit: change the `first`/`last` ranges of `tldr` or `ttldr` in `selection.json`, then run `run` again (the render detects that the cuts changed). It needs `source.mp4`: if it was deleted, it is downloaded again.
+- Manual edit: change the `first`/`last` ranges of `tldr` or `ttldr` in `selection.json`, then run `run --redo render` (a finished video is not processed again otherwise). It needs `source.mp4`: if it was deleted, it is downloaded again.
 
 ## Principles to keep
 - The agent picks **sentence IDs**, never times. Cut times come from the silences (`cut_after`), which avoids cutting a word.
