@@ -54,7 +54,16 @@ Finally, Whisper listens to the finished video and checks that the words on both
 
 ## Quick start
 
-Works on macOS, Linux and Windows. You need [uv](https://docs.astral.sh/uv/), `ffmpeg`, `node` and a logged-in [Claude Code](https://claude.com/claude-code) CLI (on Windows, use its native installer). The Whisper check runs on MLX on Apple Silicon and on [faster-whisper](https://github.com/SYSTRAN/faster-whisper) elsewhere. It comes with the `qa` extra, about 1 GB once installed on Apple Silicon; without the extra everything else still runs.
+Works on macOS, Linux and Windows. You need:
+
+- [uv](https://docs.astral.sh/uv/)
+- `ffmpeg`
+- Node 22 or newer, which yt-dlp needs to read YouTube
+- the [Claude Code](https://claude.com/claude-code) CLI, logged in: run `claude` once and sign in (on Windows, use its native installer)
+
+On macOS, `brew install uv ffmpeg node` covers the first three. On Ubuntu 24.04, `apt install ffmpeg` is fine but the `nodejs` package is version 18: take Node from [NodeSource](https://github.com/nodesource/distributions) or nvm instead. TheoLDR checks all of this before it downloads anything.
+
+The Whisper check runs on MLX on Apple Silicon and on [faster-whisper](https://github.com/SYSTRAN/faster-whisper) elsewhere. It comes with the `qa` extra, about 1 GB once installed on Apple Silicon and 0.5 GB on Linux; without the extra everything else still runs.
 
 ```bash
 git clone https://github.com/alexandreeberhardt/TheoLDR.git && cd TheoLDR
