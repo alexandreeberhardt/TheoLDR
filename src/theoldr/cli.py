@@ -1,4 +1,5 @@
 import argparse
+import shutil
 import subprocess
 import sys
 
@@ -17,6 +18,12 @@ STEP_FILES = {
     "selection": ["selection.json", "attempts"],
     "render": ["tldr.mp4", "ttldr.mp4", "cuts_tldr.json", "cuts_ttldr.json"],
 }
+REQUIRED_TOOLS = ["ffmpeg", "ffprobe", "node", "claude"]
+
+
+def missing_tools():
+    """Programs a run calls that are not on the PATH."""
+    return [tool for tool in REQUIRED_TOOLS if shutil.which(tool) is None]
 
 
 def prepare(video_id, folder):
@@ -110,7 +117,10 @@ def latest_long_videos(count=5):
 
 
 def status():
-    for folder in sorted(VIDEOS_DIR.glob("*/")):
+    folders = sorted(VIDEOS_DIR.glob("*/"))
+    if not folders:
+        print("No video processed yet.")
+    for folder in folders:
         meta_path = folder / "meta.json"
         title = read_json(meta_path)["title"] if meta_path.exists() else "?"
         qa_path = folder / "qa.json"
@@ -140,6 +150,9 @@ def main():
     if args.command == "status":
         status()
         return
+    missing = missing_tools()
+    if missing:
+        sys.exit(f"Not found on the PATH: {', '.join(missing)}. See the Quick start in README.md.")
     lock = acquire_lock(ROOT / ".theoldr.lock")
     if lock is None:
         sys.exit("Another TheoLDR run is already in progress.")

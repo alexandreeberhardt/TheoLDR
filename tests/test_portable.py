@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from theoldr import qa, render, system
+from theoldr import cli, qa, render, system
 from theoldr.common import read_json, video_id_from, write_json
 from theoldr.qa_audio import spoken_words, word_heard
 
@@ -53,3 +53,8 @@ def test_word_matching():
     assert spoken_words("[applause] so >> here we go") == ["so", "here", "we", "go"]
     assert word_heard("going", ["gonna"])
     assert not word_heard("train", ["rain"])
+
+
+def test_missing_tools(monkeypatch, tmp_path):
+    monkeypatch.setenv("PATH", str(tmp_path))
+    assert cli.missing_tools() == cli.REQUIRED_TOOLS
