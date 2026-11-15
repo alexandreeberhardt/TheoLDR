@@ -76,8 +76,8 @@ def short_error(error):
     return lines[-1] if lines else type(error).__name__
 
 
-def prepare(video_id, folder):
-    meta = fetch(video_id, folder)
+def prepare(video_id, folder, whisper_captions=False):
+    meta = fetch(video_id, folder, whisper_captions)
     if "file_duration" not in meta:
         meta["file_duration"] = media_duration(folder / "source.mp4")
         write_json(folder / "meta.json", meta)
@@ -100,7 +100,7 @@ def reset(folder, step):
             path.unlink()
 
 
-def process(url_or_id, redo=None, keep_source=False):
+def process(url_or_id, redo=None, keep_source=False, whisper_captions=False):
     video_id = video_id_from(url_or_id)
     folder = video_dir(video_id)
     if (folder / "qa.json").exists() and not redo:
@@ -111,7 +111,7 @@ def process(url_or_id, redo=None, keep_source=False):
     for stale in ("qa.json", "post.txt", "error.txt"):
         (folder / stale).unlink(missing_ok=True)
     try:
-        meta, sentences = prepare(video_id, folder)
+        meta, sentences = prepare(video_id, folder, whisper_captions)
         return finish(video_id, folder, meta, sentences, keep_source)
     except Exception as error:
         if isinstance(error, SkipVideo):
@@ -192,6 +192,9 @@ def main():
     run_parser.add_argument("--keep-source", action="store_true", help="keep source.mp4")
     latest_parser = commands.add_parser("latest", help="process the latest video not done yet")
     latest_parser.add_argument("--keep-source", action="store_true")
+    for command_parser in (run_parser, latest_parser):
+        command_parser.add_argument("--whisper-captions", action="store_true",
+                                    help="transcribe with Whisper instead of using YouTube's captions")
     commands.add_parser("status", help="list processed videos")
     args = parser.parse_args()
     for stream in (sys.stdout, sys.stderr):
@@ -220,7 +223,7 @@ def main():
 def run_command(args):
     """The folder of the processed video, or None when there was nothing to do."""
     if args.command == "run":
-        return process(args.video, args.redo, args.keep_source)
+        return process(args.video, args.redo, args.keep_source, args.whisper_captions)
     pending = [(video_id, title) for video_id, title in latest_long_videos()
                if not (VIDEOS_DIR / video_id / "qa.json").exists()
                and not (VIDEOS_DIR / video_id / "error.txt").exists()]
@@ -230,4 +233,4 @@ def run_command(args):
         return None
     video_id, title = pending[0]
     print(f"Processing: {title}")
-    return process(video_id, keep_source=args.keep_source)
+    return process(video_id, keep_source=args.keep_source, whisper_captions=args.whisper_captions)

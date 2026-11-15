@@ -268,12 +268,20 @@ def load_if_current(path, sentences):
     return data
 
 
+def captions_note(meta):
+    """Whisper does not mark speaker changes: the prompts rely on `>>`, so the agents must be told."""
+    if meta.get("captions") != "whisper":
+        return ""
+    return ("Note: this transcript was made by Whisper and has no `>>` marks. Changes of speaker are not marked: "
+            "work out from the context which passages are clips of other people, and when in doubt leave them out.\n")
+
+
 def make_outline(video, meta, folder):
     path = folder / "outline.json"
     outline = load_if_current(path, video.sentences)
     if outline:
         return outline
-    text = (f"Title: {meta['title']}\nDuration: {format_time(meta['duration'])}\n\n"
+    text = (f"Title: {meta['title']}\nDuration: {format_time(meta['duration'])}\n{captions_note(meta)}\n"
             f"Transcript:\n{video.transcript_text(with_cut_marks=False)}")
     outline = ask(prompt("outline"), text, OUTLINE_SCHEMA)
     outline["fingerprint"] = fingerprint(video.sentences)
@@ -427,12 +435,12 @@ def select(sentences, meta, folder):
     (folder / "attempts").mkdir(exist_ok=True)
 
     tldr_context = (f"Title: {meta['title']}\nOriginal duration: {format_time(meta['duration'])}\n"
-                    f"TLDR target: {target_seconds / 60:.1f} min ({target_seconds:.0f}s).\n\n"
+                    f"TLDR target: {target_seconds / 60:.1f} min ({target_seconds:.0f}s).\n{captions_note(meta)}\n"
                     f"Outline:\n{json.dumps(outline, indent=1)}\n\nTranscript:\n{video.transcript_text()}")
     tldr = selection_loop(video, folder, "tldr", tldr_context, f"{target_seconds:.0f}s", target_seconds)
     tldr_pairs = [[video.index[item["first"]], video.index[item["last"]]] for item in tldr["ranges"]]
 
-    ttldr_context = (f"Title: {meta['title']}\nTTLDR length: 60-120s.\n\n"
+    ttldr_context = (f"Title: {meta['title']}\nTTLDR length: 60-120s.\n{captions_note(meta)}\n"
                      f"Topic: {outline['topic']}\nTheo's thesis: {outline['thesis']}\n\n"
                      f"TLDR sentences:\n{tldr_sentences_text(video, tldr_pairs)}")
     ttldr = selection_loop(video, folder, "ttldr", ttldr_context, "60-120s", allowed=tldr_pairs)

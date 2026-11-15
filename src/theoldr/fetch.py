@@ -31,6 +31,7 @@ def fetch_meta(video_id, folder):
 
 
 def fetch_subs(video_id, folder):
+    """YouTube's English auto captions, or None when YouTube has not made them yet."""
     subs_path = folder / "subs.json3"
     if subs_path.exists():
         return subs_path
@@ -42,8 +43,27 @@ def fetch_subs(video_id, folder):
         if candidate.exists():
             candidate.rename(subs_path)
             return subs_path
-    raise RuntimeError("No English auto captions yet. YouTube generates them a few minutes "
-                       "to a few hours after release: try again later.")
+    return None
+
+
+def whisper_subs(words):
+    """Whisper's (word, start, end) list in the json3 layout of YouTube's captions."""
+    events = [{"tStartMs": round(start * 1000), "segs": [{"utf8": word.strip()}]}
+              for word, start, end in words if word.strip()]
+    return {"source": "whisper", "events": events}
+
+
+def transcribe_subs(source, folder):
+    """Captions made on this machine, for a video YouTube has not captioned yet."""
+    from .qa_audio import raw_words, whisper_available
+    if not whisper_available():
+        raise RuntimeError("No English auto captions yet. YouTube makes them a few minutes to a few hours "
+                           "after release: try again later, or install Whisper to transcribe here "
+                           "(`uv sync --extra qa`).")
+    subs = whisper_subs(raw_words(source))
+    if not subs["events"]:
+        raise RuntimeError("Whisper heard no speech in this video.")
+    write_json(folder / "subs.json3", subs)
 
 
 def fetch_video(video_id, folder):
@@ -56,14 +76,24 @@ def fetch_video(video_id, folder):
     return source
 
 
-def fetch(video_id, folder):
+def fetch(video_id, folder, whisper_captions=False):
+    """whisper_captions: transcribe here without asking YouTube for its captions."""
     meta = fetch_meta(video_id, folder)
     if meta["live_status"] in ("is_live", "is_upcoming"):
         raise RuntimeError("Live or upcoming stream: try again once the video is published")
     if (meta["duration"] or 0) < 180:
         raise SkipVideo("Video too short (Short)")
     log(folder, f"Video: {meta['title']} ({meta['duration'] // 60} min)")
-    fetch_subs(video_id, folder)
-    fetch_video(video_id, folder)
+    subs_path = folder / "subs.json3"
+    if not whisper_captions:
+        fetch_subs(video_id, folder)
+    source = fetch_video(video_id, folder)
     log(folder, "Download finished")
+    if not subs_path.exists():
+        reason = "asked for" if whisper_captions else "YouTube has no captions yet"
+        log(folder, f"Transcribing with Whisper ({reason})")
+        transcribe_subs(source, folder)
+    if read_json(subs_path).get("source") == "whisper" and meta.get("captions") != "whisper":
+        meta["captions"] = "whisper"
+        write_json(folder / "meta.json", meta)
     return meta

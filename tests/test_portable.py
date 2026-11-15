@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from theoldr import cli, qa, render, system
+from theoldr import cli, fetch, qa, render, select, system, transcript
 from theoldr.common import read_json, tool_name, video_id_from, write_json
 from theoldr.qa_audio import spoken_words, word_heard
 
@@ -94,3 +94,18 @@ def test_short_error():
     assert cli.short_error(failed) == "Unable to download webpage"
     assert tool_name(["/usr/bin/python3", "-m", "yt_dlp", "--encoding"]) == "yt_dlp"
     assert tool_name(["ffmpeg", "-v", "error"]) == "ffmpeg"
+
+
+def test_whisper_captions_read_like_youtube_ones(tmp_path):
+    words = [(" We're", 0.5, 0.7), (" not", 0.7, 0.9), (" engineers.", 0.9, 1.4), ("  ", 1.4, 1.5),
+             (" So", 2.0, 2.1), (" what", 2.1, 2.3), (" are", 2.3, 2.4), (" we?", 2.4, 2.8)]
+    write_json(tmp_path / "subs.json3", fetch.whisper_subs(words))
+    sentences = transcript.build_transcript(tmp_path / "subs.json3", tmp_path / "transcript.json", 10.0)
+    assert [sentence["text"] for sentence in sentences] == ["We're not engineers.", "So what are we?"]
+    assert sentences[0]["start"] == 0.5 and sentences[0]["next_start"] == 2.0
+    assert sentences[1]["last_word_start"] == 2.4 and sentences[1]["next_start"] == 10.0
+
+
+def test_captions_note():
+    assert select.captions_note({"title": "x"}) == ""
+    assert ">>" in select.captions_note({"captions": "whisper"})
