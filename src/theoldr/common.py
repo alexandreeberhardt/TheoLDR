@@ -39,9 +39,10 @@ def write_json(path, data):
     Path(path).write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def log(folder, message):
+def log(folder, message, show=True):
     line = f"[{time.strftime('%H:%M:%S')}] {message}"
-    print(line, flush=True)
+    if show:
+        print(line, flush=True)
     with open(Path(folder) / "log.txt", "a", encoding="utf-8") as handle:
         handle.write(line + "\n")
 
@@ -54,7 +55,14 @@ def run(command, attempts=1, **kwargs):
             return result
         if attempt < attempts:
             time.sleep(10 * attempt)
-    raise RuntimeError(f"{command[:4]}... failed:\n{result.stderr[-2000:]}")
+    raise RuntimeError(f"{tool_name(command)} failed:\n{result.stderr[-2000:]}")
+
+
+def tool_name(command):
+    """'yt_dlp' for [python, '-m', 'yt_dlp', ...], 'ffmpeg' for ['ffmpeg', ...]."""
+    if len(command) > 2 and command[1] == "-m":
+        return command[2]
+    return Path(command[0]).stem
 
 
 def check_free_space():

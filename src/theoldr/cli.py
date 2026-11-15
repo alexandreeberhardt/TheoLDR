@@ -1,4 +1,6 @@
 import argparse
+import json
+import re
 import shutil
 import subprocess
 import sys
@@ -19,11 +21,59 @@ STEP_FILES = {
     "render": ["tldr.mp4", "ttldr.mp4", "cuts_tldr.json", "cuts_ttldr.json"],
 }
 REQUIRED_TOOLS = ["ffmpeg", "ffprobe", "node", "claude"]
+MIN_NODE_MAJOR = 22  # yt-dlp ignores an older Node and then fails to read YouTube
+HANDLED_ERRORS = (RuntimeError, ValueError, subprocess.CalledProcessError)
 
 
 def missing_tools():
     """Programs a run calls that are not on the PATH."""
     return [tool for tool in REQUIRED_TOOLS if shutil.which(tool) is None]
+
+
+def tool_output(command):
+    """What a short command prints, or None if it cannot run."""
+    try:
+        result = subprocess.run(command, capture_output=True, encoding="utf-8", errors="replace", timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return result.stdout
+
+
+def node_major(version_output):
+    """22 for 'v22.11.0'; None when the version cannot be read."""
+    match = re.match(r"v(\d+)\.", version_output or "")
+    return int(match.group(1)) if match else None
+
+
+def claude_logged_out(status_output):
+    """True only when `claude auth status` clearly says so: an older CLI without that command is not blocked."""
+    try:
+        return json.loads(status_output or "").get("loggedIn") is False
+    except (json.JSONDecodeError, AttributeError):
+        return False
+
+
+def setup_problem():
+    """Why a run cannot start, or None. Checked before anything is downloaded."""
+    missing = missing_tools()
+    if missing:
+        return f"Not found on the PATH: {', '.join(missing)}. See the Quick start in README.md."
+    major = node_major(tool_output(["node", "--version"]))
+    if major is not None and major < MIN_NODE_MAJOR:
+        return f"Node {major} is too old: yt-dlp needs Node {MIN_NODE_MAJOR} or newer."
+    if claude_logged_out(tool_output(["claude", "auth", "status"])):
+        return "Claude Code is not logged in: run `claude` once and sign in, then run this again."
+    return None
+
+
+def short_error(error):
+    """The line that says what went wrong, without the rest of the tool's output."""
+    text = error.stderr if isinstance(error, subprocess.CalledProcessError) else str(error)
+    lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
+    errors = [line for line in lines if line.startswith("ERROR:")]
+    if errors:
+        return errors[-1].removeprefix("ERROR:").strip()
+    return lines[-1] if lines else type(error).__name__
 
 
 def prepare(video_id, folder):
@@ -66,7 +116,7 @@ def process(url_or_id, redo=None, keep_source=False):
     except Exception as error:
         if isinstance(error, SkipVideo):
             (folder / "error.txt").write_text(f"{error}\n", encoding="utf-8")
-        log(folder, f"Failed: {error}")
+        log(folder, f"Failed: {error}", show=not isinstance(error, HANDLED_ERRORS))  # main() prints the short version
         notify(f"Failed on {video_id}: {str(error)[:80]}")
         raise
 
@@ -150,25 +200,34 @@ def main():
     if args.command == "status":
         status()
         return
-    missing = missing_tools()
-    if missing:
-        sys.exit(f"Not found on the PATH: {', '.join(missing)}. See the Quick start in README.md.")
+    problem = setup_problem()
+    if problem:
+        sys.exit(problem)
     lock = acquire_lock(ROOT / ".theoldr.lock")
     if lock is None:
         sys.exit("Another TheoLDR run is already in progress.")
     keep_awake()
-    if args.command == "run":
-        folder = process(args.video, args.redo, args.keep_source)
-    else:
-        pending = [(video_id, title) for video_id, title in latest_long_videos()
-                   if not (VIDEOS_DIR / video_id / "qa.json").exists()
-                   and not (VIDEOS_DIR / video_id / "error.txt").exists()]
-        if not pending:
-            print("Nothing new: the latest videos are already processed "
-                  "(failed ones can be retried with `theoldr run <id>`).")
-            return
-        video_id, title = pending[0]
-        print(f"Processing: {title}")
-        folder = process(video_id, keep_source=args.keep_source)
+    try:
+        folder = run_command(args)
+    except HANDLED_ERRORS as error:
+        sys.exit(f"Failed: {short_error(error)}")
+    if folder is None:
+        return
     print(f"Results: {folder}")
     open_folder(folder)
+
+
+def run_command(args):
+    """The folder of the processed video, or None when there was nothing to do."""
+    if args.command == "run":
+        return process(args.video, args.redo, args.keep_source)
+    pending = [(video_id, title) for video_id, title in latest_long_videos()
+               if not (VIDEOS_DIR / video_id / "qa.json").exists()
+               and not (VIDEOS_DIR / video_id / "error.txt").exists()]
+    if not pending:
+        print("Nothing new: the latest videos are already processed "
+              "(failed ones can be retried with `theoldr run <id>`).")
+        return None
+    video_id, title = pending[0]
+    print(f"Processing: {title}")
+    return process(video_id, keep_source=args.keep_source)

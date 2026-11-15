@@ -4,7 +4,7 @@ import subprocess
 import pytest
 
 from theoldr import cli, qa, render, system
-from theoldr.common import read_json, video_id_from, write_json
+from theoldr.common import read_json, tool_name, video_id_from, write_json
 from theoldr.qa_audio import spoken_words, word_heard
 
 CUTS = [{"first": "s1", "last": "s1", "start": 1.0, "end": 3.0},
@@ -58,3 +58,39 @@ def test_word_matching():
 def test_missing_tools(monkeypatch, tmp_path):
     monkeypatch.setenv("PATH", str(tmp_path))
     assert cli.missing_tools() == cli.REQUIRED_TOOLS
+
+
+def test_node_version():
+    assert cli.node_major("v22.11.0\n") == 22
+    assert cli.node_major("v18.19.1") == 18
+    assert cli.node_major(None) is None
+    assert cli.node_major("not a version") is None
+
+
+def test_claude_login():
+    assert cli.claude_logged_out('{"loggedIn": false}')
+    assert not cli.claude_logged_out('{"loggedIn": true, "authMethod": "claude.ai"}')
+    assert not cli.claude_logged_out("error: unknown command 'auth'")  # older CLI: not blocked
+    assert not cli.claude_logged_out(None)
+
+
+def test_setup_problem(monkeypatch):
+    outputs = {"node": "v18.19.1", "claude": '{"loggedIn": true}'}
+    monkeypatch.setattr(cli, "missing_tools", lambda: [])
+    monkeypatch.setattr(cli, "tool_output", lambda command: outputs[command[0]])
+    assert "Node 18 is too old" in cli.setup_problem()
+    outputs["node"] = "v22.0.0"
+    assert cli.setup_problem() is None
+    outputs["claude"] = '{"loggedIn": false}'
+    assert "not logged in" in cli.setup_problem()
+
+
+def test_short_error():
+    ytdlp = RuntimeError("yt_dlp failed:\nWARNING: No supported JavaScript runtime\n"
+                         "ERROR: [youtube] abc: Sign in to confirm you're not a bot\n")
+    assert cli.short_error(ytdlp) == "[youtube] abc: Sign in to confirm you're not a bot"
+    assert cli.short_error(ValueError("No YouTube ID found in: notanid")) == "No YouTube ID found in: notanid"
+    failed = subprocess.CalledProcessError(1, ["yt-dlp"], stderr="ERROR: Unable to download webpage\n")
+    assert cli.short_error(failed) == "Unable to download webpage"
+    assert tool_name(["/usr/bin/python3", "-m", "yt_dlp", "--encoding"]) == "yt_dlp"
+    assert tool_name(["ffmpeg", "-v", "error"]) == "ffmpeg"
