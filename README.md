@@ -14,6 +14,8 @@ Start with the TTLDR, then compare with the original. Both short versions are un
 | [TLDR](https://youtu.be/vPECheshXu4) | 9:04 |
 | [Original](https://youtu.be/GtJKFhztgdM) | 45:21 |
 
+If the 1:44 version was worth your time, **a star** ⭐ helps other people who watch Theo find the tool.
+
 ## Results
 
 Real runs on recent videos:
